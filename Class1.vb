@@ -497,7 +497,7 @@ ERROR_CATCH:
         For iFluid = 0 To nFluid - 1
             streamName(iFluid) = myFluid(iFluid).name
             For i = 0 To nComp - 1
-                x(i, iFluid) = myFluid(iFluid).MolarFractions(i)
+                x(i, iFluid) = myFluid(iFluid).MolarFractionsValue(i)
             Next i
         Next iFluid
         ' Associate matrix to final EDF variables for visualizing
