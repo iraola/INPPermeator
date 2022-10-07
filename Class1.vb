@@ -495,7 +495,7 @@ ERROR_CATCH:
         ReDim Preserve x(nComp - 1, 0 To nFluid - 1)
         ReDim streamName(0 To nFluid - 1)
         For iFluid = 0 To nFluid - 1
-            streamName(iFluid) = myFluid(iFluid).Name
+            streamName(iFluid) = myFluid(iFluid).name
             For i = 0 To nComp - 1
                 x(i, iFluid) = myFluid(iFluid).MolarFractions(i)
             Next i
@@ -503,7 +503,7 @@ ERROR_CATCH:
         ' Associate matrix to final EDF variables for visualizing
         edfStreamName.Value = streamName                          ' Columns labels (streams)
         edfComposition.Values = x                           ' Values in table
-        edfCompName.Values = myFluid(0).Components.names    ' Rows labels (components)
+        edfCompName.Values = myFluid(0).Components.Names    ' Rows labels (components)
         Composition = True
     End Function
     Private Function Condition(myFluid() As Fluid) As Boolean
@@ -1037,7 +1037,7 @@ ERROR_CATCH:
         k2(0) = k1(0)
     End Sub
 
-    Public Sub UpdateCoefficientsOfFlowEquations(Dtime As Double, k1, k2)
+    Public Sub UpdateCoefficientsOfFlowEquations(Dtime As Double, k1 As Double(), k2 As Double())
         ' Called at each step of the integration to update the coefficients of pressure flow equations.
         k1(0) = edfk.Value
         k2(0) = k1(0)
@@ -1075,7 +1075,7 @@ ERROR_CATCH:
         ' Aqu� guardamos las "old" de las variables en derivadas
     End Sub
 
-    Public Sub UpdateGeneralEqDerivsAndRHS(Dtime As Double, Derivs, Rhs)
+    Public Sub UpdateGeneralEqDerivsAndRHS(Dtime As Double, Derivs As Double(,), Rhs As Double())
         ' Called at each iteration of the Pressure Flow Solver to update the derivatives and right hand side of General equations.
         Dim Fin As Double, Fout As Double, Fperm As Double
         Dim rhoIn As Double, rhoOut As Double, rhoPerm As Double
