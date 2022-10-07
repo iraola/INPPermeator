@@ -486,7 +486,7 @@ ERROR_CATCH:
     Private Function Composition(myFluid() As Fluid) As Boolean
         Dim iFluid As Long, i As Long
         Dim streamName() As String
-        Dim x() As Double
+        Dim x(,) As Double
         ' Set bounds of final EDF vatiables
         edfCompName.SetBounds(nComp)
         edfComposition.SetBounds(nFluid, nComp)
