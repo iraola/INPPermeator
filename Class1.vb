@@ -246,7 +246,7 @@ ErrorCatch:
         If edfRetentate Is Nothing Then
             Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 3, "Non permeated outlet stream is missing")
         End If
-        If edfLen < 0 Or edfDiam < 0 Or edfThick < 0 Or edfk < 0 Or edfNtubes < 0 Or edfAperm < 0 Then
+        If edfLen.Value < 0 Or edfDiam.Value < 0 Or edfThick.Value < 0 Or edfk.Value < 0 Or edfNtubes.Value < 0 Or edfAperm.Value < 0 Then
             Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 4, "Physical parameters missing or incorrect")
         End If
         If flagRet Then
@@ -291,7 +291,7 @@ ErrorCatch:
         '%% Geometry variables
             Case "Length"
                 edfLen = myContainer.FindVariable("Length").Variable
-                L = edfLen.Value * edfNtubes                    ' total length of tubes
+                L = edfLen.Value * edfNtubes.Value                    ' total length of tubes
                 ' Recalculation of cross-area and total volume
                 Area = pi * (Din ^ 2) / 4
                 Volume = L * Area
@@ -305,7 +305,7 @@ ErrorCatch:
                 Din = edfDiam.GetValue
                 ' Recalculation of cross-area and total volume
                 Area = pi * (Din ^ 2) / 4
-                Volume = (edfLen.Value * edfNtubes * Area)
+                Volume = (edfLen.Value * edfNtubes.Value * Area)
                 ' Recalculation of total permeation surface
                 Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
                 edfAperm.SetValue(L * (2 * pi * Ravg))
@@ -330,11 +330,11 @@ ErrorCatch:
             Case "Ntubes"
                 edfNtubes = myContainer.FindVariable("Ntubes").Variable
                 ' Recalculation of total length (mantaining length/tube (edfLen))
-                L = edfLen.Value * edfNtubes
+                L = edfLen.Value * edfNtubes.Value
                 ' Recalculation of total permeation surface (last change affects area)
                 Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                edfAperm.SetValue L * (2 * pi * Ravg)
-            Aperm = edfAperm.Value
+                edfAperm.SetValue(L * (2 * pi * Ravg))
+                Aperm = edfAperm.Value
                 ' Recalculation of cross-area and total volume
                 Area = pi * (Din ^ 2) / 4
                 Volume = L * Area
@@ -501,7 +501,7 @@ ERROR_CATCH:
             Next i
         Next iFluid
         ' Associate matrix to final EDF variables for visualizing
-        edfStreamName = streamName                          ' Columns labels (streams)
+        edfStreamName.Value = streamName                          ' Columns labels (streams)
         edfComposition.Values = x                           ' Values in table
         edfCompName.Values = myFluid(0).Components.names    ' Rows labels (components)
         Composition = True
@@ -529,11 +529,11 @@ ERROR_CATCH:
             MolFlow(i) = myFluid(i).MolarFlowValue
         Next i
         ' Associate matrix to final EDF variables for visualizing
-        edfVapFrac = vapfrac
-        edfTemperature = Temp
-        edfPressure = Press
-        edfMolFlow = MolFlow
-        edfMassFlow = massFlow
+        edfVapFrac.Value = vapfrac
+        edfTemperature.Value = Temp
+        edfPressure.Value = Press
+        edfMolFlow.Value = MolFlow
+        edfMassFlow.Value = massFlow
         Condition = True
     End Function
 
@@ -1071,7 +1071,7 @@ ERROR_CATCH:
 
     Public Sub PrepareToIterateOnGeneralEqns(Dtime As Double)
         ' Called at each step of integration right before pressure flow solver starts iteration to solve the set of equations.
-        Fout_old = edfRetentate.MolarFlow
+        Fout_old = edfRetentate.MolarFlow.Value
         ' Aqu� guardamos las "old" de las variables en derivadas
     End Sub
 
@@ -1089,10 +1089,10 @@ ERROR_CATCH:
         With edfRetentate
             Fout = .MolarFlowValue
             'rhoOut = .MolarDensityValue
-            Qout = .ActualVolumeFlow
+            Qout = .ActualVolumeFlow.Value
         End With
         With edfPermeate
-            Fperm = .MolarFlow
+            Fperm = .MolarFlow.Value
             'rhoPerm = .MolarDensityValue
             'Qperm = .ActualVolumeFlow
         End With
@@ -1138,7 +1138,7 @@ ERROR_CATCH:
             fluidList(i) = StreamList(i).DuplicateFluid
         Next i
         ' Store values in double VB variables for flash
-        Tin = edfInlet.Temperature
+        Tin = edfInlet.Temperature.Value
         Dim Pperm, Pout As Double
         Pperm = edfPermeate.PressureValue
         Pout = edfRetentate.PressureValue
