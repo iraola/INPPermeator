@@ -789,7 +789,6 @@ ERROR_CATCH:
         Dim i As Long
         Dim lenvec() As Double, dx As Double
         ReDim lenvec(n - 1)
-        ReDim LenghtVector(n - 1)
         dx = L / n
         lenvec(0) = dx
         For i = 1 To n - 1
