@@ -103,8 +103,8 @@ Imports System.Data.SqlClient
     Dim StreamList() As ProcessStream
     Dim permList() As Double
 
-    Implements ExtnUnitOperation
-    Implements ExtensionObject
+    'Implements ExtnUnitOperation
+    'Implements ExtensionObject
 
 
     Private Function ExtnUnitOperation_Initialize(ByVal Container As ExtnUnitOperationContainer, ByVal IsRecalling As Boolean) As Long
