@@ -64,9 +64,9 @@ Namespace My
     Friend Module MySettingsProperty
         
         <Global.System.ComponentModel.Design.HelpKeywordAttribute("My.Settings")>  _
-        Friend ReadOnly Property Settings() As Global.INPPermeator.My.MySettings
+        Friend ReadOnly Property Settings() As Global.CINPPermeator.My.MySettings
             Get
-                Return Global.INPPermeator.My.MySettings.Default
+                Return Global.CINPPermeator.My.MySettings.Default
             End Get
         End Property
     End Module

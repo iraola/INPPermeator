@@ -1,6 +1,5 @@
 ﻿Option Strict Off
 Option Explicit On
-Imports System.Data.SqlClient
 
 <System.Runtime.InteropServices.ProgId("INPPermeator.CINPPermeator")> Public Class CINPPermeator
 

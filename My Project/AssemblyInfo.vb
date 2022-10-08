@@ -8,17 +8,17 @@ Imports System.Runtime.InteropServices
 
 ' Review the values of the assembly attributes
 
-<Assembly: AssemblyTitle("INPPermeator")>
+<Assembly: AssemblyTitle("CINPPermeator")>
 <Assembly: AssemblyDescription("")>
 <Assembly: AssemblyCompany("")>
-<Assembly: AssemblyProduct("INPPermeator")>
+<Assembly: AssemblyProduct("CINPPermeator")>
 <Assembly: AssemblyCopyright("Copyright ©  2022")>
 <Assembly: AssemblyTrademark("")>
 
 <Assembly: ComVisible(True)>
 
 'The following GUID is for the ID of the typelib if this project is exposed to COM
-<Assembly: Guid("527547c6-5167-425d-a024-08f7b9cfbb58")>
+<Assembly: Guid("5a71b769-35fd-4c9f-904d-c422085aaafc")>
 
 ' Version information for an assembly consists of the following four values:
 '
