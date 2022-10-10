@@ -106,7 +106,7 @@ Option Explicit On
     'Implements ExtensionObject
 
 
-    Private Function ExtnUnitOperation_Initialize(ByVal Container As ExtnUnitOperationContainer, ByVal IsRecalling As Boolean) As Long
+    Private Function Initialize(ByVal Container As ExtnUnitOperationContainer, ByVal IsRecalling As Boolean) As Long
         Dim IRV As InternalRealVariable '...for the controllers that only need to be initialized...
         Dim Ravg As Double
         '...Get the pointer to the container...
@@ -146,13 +146,13 @@ Option Explicit On
         ' Loop for setting index for components of interest (based on Inlet's basis manager
         Call iniCompIndex()
 
-        ExtnUnitOperation_Initialize = CurrentExtensionVersion_enum.extnCurrentVersion
+        Initialize = CurrentExtensionVersion_enum.extnCurrentVersion
         Exit Function
 ErrorCatch:
         MsgBox("Error in Initialize function")
     End Function
 
-    Private Sub ExtnUnitOperation_Execute(ByVal Forgetting As Boolean)
+    Private Sub Execute(ByVal Forgetting As Boolean)
         Dim PermeationT As Double, PermeationH As Double, NonPermeationT As Double, NonPermeationH As Double
         Dim Comp As Boolean, cond As Boolean
         Dim i As Long
@@ -225,7 +225,7 @@ ErrorCatch:
             Comp = Composition(fluidList)
             cond = Condition(fluidList)
             '...if we are here it is because we have solved the unit properly...
-            myContainer.SolveComplete
+            myContainer.SolveComplete()
         End If
         Exit Sub
 
@@ -233,7 +233,7 @@ ErrorCatch:
         'MsgBox "Error in Execute method. " & Err.Description
     End Sub
 
-    Private Sub ExtensionObject_StatusQuery(ByVal Status As ObjectStatus)
+    Private Sub StatusQuery(ByVal Status As ObjectStatus)
         If myContainer.ExtensionInterface.IsIgnored = True Then Exit Sub
 
         If edfInlet Is Nothing Then
@@ -257,18 +257,18 @@ ErrorCatch:
         If IsForgetting Then Exit Sub
     End Sub
 
-    Private Function ExtensionObject_OnHelp(HelpPanel As String) As Boolean
-        ExtensionObject_OnHelp = True
+    Private Function OnHelp(HelpPanel As String) As Boolean
+        OnHelp = True
     End Function
 
-    Private Function ExtensionObject_OnView(ViewName As String) As Boolean
-        ExtensionObject_OnView = True
+    Private Function OnView(ViewName As String) As Boolean
+        OnView = True
     End Function
 
-    Private Sub ExtensionObject_Save()
+    Private Sub Save()
     End Sub
 
-    Private Sub ExtensionObject_VariableChanged(ByVal Variable As InternalVariableWrapper)
+    Private Sub VariableChanged(ByVal Variable As InternalVariableWrapper)
         ' Called when the user modifies any edf variable -> here is required to update this variales as needed
         Dim Ravg As Double
         Select Case Variable.Tag
@@ -375,8 +375,8 @@ ERROR_CATCH:
         Call myContainer.Trace(myContainer.name & ": Error in Variable Changed for variable " & Variable.Tag & ".", False)
     End Sub
 
-    Private Function ExtensionObject_VariableChanging(ByVal Variable As InternalVariableWrapper) As Boolean
-        ExtensionObject_VariableChanging = True
+    Private Function VariableChanging(ByVal Variable As InternalVariableWrapper) As Boolean
+        VariableChanging = True
         'Dim varName As String
         ' Catch the name of the variable being changed
         'varName = Variable.Tag
@@ -400,13 +400,13 @@ ERROR_CATCH:
         End Select
     End Function
 
-    Private Sub ExtensionObject_VariableQuery(ByVal Variable As InternalVariableWrapper)
+    Private Sub VariableQuery(ByVal Variable As InternalVariableWrapper)
     End Sub
 
-    Private Sub ExtnUnitOperation_BasisChanged()
+    Private Sub BasisChanged()
     End Sub
 
-    Private Sub ExtensionObject_Terminate()
+    Private Sub Terminate()
         '  m_InpExtnUtils.ExtnUtils_Terminate
         edfThick = Nothing
         edfLen = Nothing
