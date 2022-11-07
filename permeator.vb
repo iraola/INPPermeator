@@ -26,7 +26,7 @@ Option Explicit On
         'Step 2 - Complete the Set... lines to reference the correct EDF variables
         myContainer = Container
         'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        Feed = myContainer.FindVariable("FeedStream").Variable.object
+        Feed = myContainer.FindVariable("Inlet").Variable.object
         'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
         Product = myContainer.FindVariable("ProductStream").Variable.object
         pressureRFV = myContainer.FindVariable("PressureData").Variable
@@ -222,9 +222,9 @@ ErrorTrap:
         Dim I As Short
         Select Case Variable.Tag
 
-            Case "FeedStream"
+            Case "Inlet"
                 'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                Feed = myContainer.FindVariable("FeedStream").Variable.object
+                Feed = myContainer.FindVariable("Inlet").Variable.object
             Case "ProductStream"
                 'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 Product = myContainer.FindVariable("ProductStream").Variable.object

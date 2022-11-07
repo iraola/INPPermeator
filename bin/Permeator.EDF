@@ -1,0 +1,194 @@
+~~_PermeatorExtn.Permeator_Variables
+
+ExtensionVariables EV
+   AttachmentVar "Inlet" "Inlet" "MaterialStreamObject" 0 Persistent AutoCompress Feed
+   AttachmentVar "ProductStream" "Product Stream" "MaterialStreamObject" 0 Persistent AutoCompress Product
+   RealVar "PressureData" "Pressure Data" "Pressure" 1 Persistent TriggerSolve
+   RealVar "FlowData" "Flow Data" "StdGasFlow" 1 Persistent TriggerSolve
+   RealVar "NumberOfPoints" "Number Of Points" "Index" 0 Persistent TriggerSolve
+   TextVar "PlotName" "PlotName" 0 Persistent NoTriggerSolve
+   ExtensionType "UnitOperation"
+   ObjectDescription "My Permeator Test"
+   BaseVariables "flowobj"
+end
+
+~~_PermeatorExtn.Permeator_DefaultView
+
+SubViewMgr PageController
+   TargetMoniker ":PageNumber.0"
+   State "Connections" 0.000000 0.000000 ":"
+   State "PQData" 1.000000 1.000000 ":"
+end
+
+StaticText NameLabel
+   Area 4 6 22 8
+   Label "&Name:"
+   SourceViewMgr PageController 1
+end
+
+TextEntry NameEntry
+   Area 28 4 116 13
+   TargetMoniker ":Name"
+   SourceViewMgr PageController 1
+end
+
+PageTabs Page1
+   Area 0 160 224 16
+   TargetMoniker ":PageNumber.0"
+   StretchWidth
+   FixToBottom
+   Tab 0.000000 "Connections"
+   Tab 1.000000 "P-Q Data"
+end
+
+Form Main
+   Title "%s"
+   Widget PlotVisControl
+   Widget PageController
+   Widget NameLabel
+   Widget NameEntry
+   Widget Page1
+   Widget FeedStreamSelector
+   Widget ProductStream
+   Widget StaticText1
+   Widget StaticText2
+   Widget MatrixWidget1
+   Widget PQDataGB
+   Widget NumOfPointsText
+   Widget NumOfPointsInput
+   Widget StaticText3
+   Widget PQDataRB
+   Widget PQPlotWidget
+   Widget DeleteButton
+   Widget CheckBox1
+   Version 1
+   PageBottom Page1
+end
+
+AttachmentName FeedStreamSelector
+   Area 28 40 75 12
+   TargetMoniker ":MaterialStreamObject.0.0(FeedStream)"
+   SourceViewMgr PageController 1
+   FlyByDescription "Select a Feed Stream"
+   MatchByAbbrev
+   NoCreate
+end
+
+AttachmentName ProductStream
+   Area 124 40 75 12
+   TargetMoniker ":MaterialStreamObject.0.0(ProductStream)"
+   SourceViewMgr PageController 1
+   FlyByDescription "Select a Product Stream"
+   MatchByAbbrev
+   NoCreate
+end
+
+StaticText StaticText1
+   Area 28 26 64 8
+   Label "Bottom Hole Feed"
+   SourceViewMgr PageController 1
+end
+
+StaticText StaticText2
+   Area 124 26 76 8
+   Label "Wellhead Product"
+   SourceViewMgr PageController 1
+end
+
+MatrixWidget MatrixWidget1
+   Area 16 52 150 98
+   StretchHeight
+   SourceViewMgr PageController 2
+   SourceViewMgr PlotVisControl 1
+   CellSize 75 10
+   ShowLabels Top
+   ShowUnits Top
+   SingleSelectionOnly
+   Info MatrixDataSet3
+   Info MatrixDataSet2
+end
+
+GroupBox PQDataGB
+   Area 0 0 212 152
+   Label "Pressure and Flow Data"
+   StretchWidth
+   StretchHeight
+   SourceViewMgr PageController 2
+end
+
+StaticText NumOfPointsText
+   Area 20 30 64 8
+   Label "Number of data points:"
+   SourceViewMgr PageController 2
+   SourceViewMgr PlotVisControl 1
+end
+
+NumericalInput NumOfPointsInput
+   Area 100 28 75 13
+   TargetMoniker ":ExtraData.0.0(NumberOfPoints)"
+   SourceViewMgr PageController 2
+   SourceViewMgr PlotVisControl 1
+   EmptyText "<empty>"
+end
+
+StaticText StaticText3
+   Area 64 182 100 10
+   TargetMoniker ":Status.1"
+   StretchWidth
+   FixToBottom
+   BackgroundColour "StatusGreen"
+   BGColourMoniker ":Count.1"
+   Align Centre
+   Framed
+end
+
+NumericMatrixInfo MatrixDataSet3
+   Moniker ":ExtraData.0.0.[](PressureData)"
+   Format "%.4g"
+   Label "Pressure"
+end
+
+NumericMatrixInfo MatrixDataSet2
+   Moniker ":ExtraData.0.0.[](FlowData)"
+   Format "%.4g"
+   Label "Flow"
+end
+
+SubViewMgr PlotVisControl
+   State "Table" 0.000000 0.000000 ":"
+   State "Plot" 1.000000 1.000000 ":"
+end
+
+RadioButtons PQDataRB
+   TargetMoniker ":SubViewMgr.0"
+   TargetViewable PlotVisControl
+   SourceViewMgr PageController 2
+   Button 0.000000 24 12 40 "Table" TextRight
+   Button 1.000000 66 12 35 "Plot" TextRight
+end
+
+PlotWidget PQPlotWidget
+   Area 14 27 190 117
+   StretchWidth
+   StretchHeight
+   SourceViewMgr PageController 2
+   SourceViewMgr PlotVisControl 2
+   PlotDescription "PlotName"
+   InternalSize 640 480
+end
+
+Button DeleteButton
+   Area 4 180 50 16
+   Label "Delete"
+   FixToBottom
+   Message ":Delete"
+end
+
+CheckBox CheckBox1
+   Area 184 180 33 10
+   Label "Ignored"
+   TargetMoniker ":Ignored.300"
+   FixToBottom
+   FixToRight
+end
+
