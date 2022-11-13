@@ -28,7 +28,7 @@ Option Explicit On
         'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
         Feed = myContainer.FindVariable("Inlet").Variable.object
         'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        Product = myContainer.FindVariable("ProductStream").Variable.object
+        Product = myContainer.FindVariable("NoPermOut").Variable.object
         pressureRFV = myContainer.FindVariable("PressureData").Variable
         flowRFV = myContainer.FindVariable("FlowData").Variable
         NumberOfPoints = myContainer.FindVariable("NumberOfPoints").Variable
@@ -225,9 +225,9 @@ ErrorTrap:
             Case "Inlet"
                 'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 Feed = myContainer.FindVariable("Inlet").Variable.object
-            Case "ProductStream"
+            Case "NoPermOut"
                 'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                Product = myContainer.FindVariable("ProductStream").Variable.object
+                Product = myContainer.FindVariable("NoPermOut").Variable.object
 
             Case "NumberOfPoints"
                 'UPGRADE_WARNING: Couldn't resolve default property of object pressureRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'

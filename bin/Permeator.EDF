@@ -2,7 +2,7 @@
 
 ExtensionVariables EV
    AttachmentVar "Inlet" "Inlet" "MaterialStreamObject" 0 Persistent AutoCompress Feed
-   AttachmentVar "ProductStream" "Product Stream" "MaterialStreamObject" 0 Persistent AutoCompress Product
+   AttachmentVar "NoPermOut" "NoPermOut" "MaterialStreamObject" 0 Persistent AutoCompress Product
    RealVar "PressureData" "Pressure Data" "Pressure" 1 Persistent TriggerSolve
    RealVar "FlowData" "Flow Data" "StdGasFlow" 1 Persistent TriggerSolve
    RealVar "NumberOfPoints" "Number Of Points" "Index" 0 Persistent TriggerSolve
@@ -48,8 +48,8 @@ Form Main
    Widget NameLabel
    Widget NameEntry
    Widget Page1
-   Widget FeedStreamSelector
-   Widget ProductStream
+   Widget InletSelector
+   Widget NoPermOutSelector
    Widget StaticText1
    Widget StaticText2
    Widget MatrixWidget1
@@ -65,18 +65,18 @@ Form Main
    PageBottom Page1
 end
 
-AttachmentName FeedStreamSelector
+AttachmentName InletSelector
    Area 28 40 75 12
-   TargetMoniker ":MaterialStreamObject.0.0(FeedStream)"
+   TargetMoniker ":MaterialStreamObject.0.0(Inlet)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Feed Stream"
    MatchByAbbrev
    NoCreate
 end
 
-AttachmentName ProductStream
+AttachmentName NoPermOutSelector
    Area 124 40 75 12
-   TargetMoniker ":MaterialStreamObject.0.0(ProductStream)"
+   TargetMoniker ":MaterialStreamObject.0.0(NoPermOut)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Product Stream"
    MatchByAbbrev
