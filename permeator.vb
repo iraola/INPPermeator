@@ -23,17 +23,12 @@ Option Explicit On
     Public Function Initialize(ByRef Container As HYSYS.ExtnUnitOperationContainer, ByRef IsRecalling As Boolean) As Integer
 
         On Error GoTo ErrorTrap
-        'Step 2 - Complete the Set... lines to reference the correct EDF variables
+        ' Initialize container
         myContainer = Container
-        'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        Feed = myContainer.FindVariable("Inlet").Variable.object
-        'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        Product = myContainer.FindVariable("NoPermOut").Variable.object
-        pressureRFV = myContainer.FindVariable("PressureData").Variable
-        flowRFV = myContainer.FindVariable("FlowData").Variable
-        NumberOfPoints = myContainer.FindVariable("NumberOfPoints").Variable
-        myPlotName = myContainer.FindVariable("PlotName").Variable
+        ' Initialize EDF variables
+        Call PointedEDFVariables()
 
+        ' Recall check
         If Not IsRecalling Then
             'Step 3 - set the NumberOfPoints variable to 0.
             NumberOfPoints.Value = 0
@@ -263,6 +258,48 @@ ErrorTrap:
         MsgBox("Variable Changed Error")
     End Sub
 
+
+    Private Sub PointedEDFVariables()
+        With myContainer
+            Feed = .FindVariable("Inlet").Variable.object
+            Product = .FindVariable("NoPermOut").Variable.object
+            pressureRFV = .FindVariable("PressureData").Variable
+            flowRFV = .FindVariable("FlowData").Variable
+            NumberOfPoints = .FindVariable("NumberOfPoints").Variable
+            myPlotName = .FindVariable("PlotName").Variable
+            'edfThick = .FindVariable("Thickness").Variable
+            'edfLen = .FindVariable("Length").Variable
+            'edfDiam = .FindVariable("Diam").Variable
+            'edfAperm = .FindVariable("Aperm").Variable
+            'edfNtubes = .FindVariable("Ntubes").Variable
+            'edfInlet = .FindVariable("Inlet").Variable.object
+            'edfPermeate = .FindVariable("PermOut").Variable.object
+            'edfRetentate = .FindVariable("NoPermOut").Variable.object
+            'edfPermIn = .FindVariable("PermIn").Variable.object
+            'edfn = .FindVariable("n").Variable
+            'edfDT = .FindVariable("DT").Variable
+            'edfDH = .FindVariable("DH").Variable
+            'edfComposition = .FindVariable("Composition").Variable
+            'edfCompName = .FindVariable("CompoName").Variable
+            'edfStreamName = .FindVariable("StreamNames").Variable
+            'edfVapFrac = .FindVariable("VapFrac").Variable
+            'edfTemperature = .FindVariable("StreamTemp").Variable
+            'edfPressure = .FindVariable("StreamPress").Variable
+            'edfMolFlow = .FindVariable("StreamMolFlow").Variable
+            'edfMassFlow = .FindVariable("StreamMassFlow").Variable
+            'edfPressDrop = .FindVariable("PressDrop").Variable
+            'edfPermPressDrop = .FindVariable("PermPressDrop").Variable
+            'edfLengthPos = .FindVariable("LengthPos").Variable
+            'edfCompT = .FindVariable("CompT").Variable
+            'edfCompH = .FindVariable("CompH").Variable
+            'edfNpoints = .FindVariable("NumberOfPoints").Variable
+            'myPlotNameH = .FindVariable("PlotNameH").Variable
+            'myPlotNameT = .FindVariable("PlotNameT").Variable
+            'edfDiamExt = .FindVariable("DiamExtern").Variable
+            ''molDensity = .FindVariable("molDensity").Variable
+            'edfk = .FindVariable("k").Variable
+        End With
+    End Sub
 
     Function LinearInterpolation(ByRef xDataRFV As HYSYS.InternalRealFlexVariable, ByRef yDataRFV As HYSYS.InternalRealFlexVariable, ByRef xPoint As HYSYS.RealVariable) As Double
         'This method linear interpolates to find the y point that coresponds to the known
