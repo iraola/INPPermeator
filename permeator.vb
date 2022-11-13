@@ -193,37 +193,37 @@ ErrorTrap:
         '    Call Status.AddStatusCondition(slError, 6, "No species permeating")
         'End If
 
-        ' DELETE
-        If NumberOfPoints.Value <= 1 Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 7, "Not enough PQ Data Points")
-        End If
+        '' DELETE
+        'If NumberOfPoints.Value <= 1 Then
+        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 7, "Not enough PQ Data Points")
+        'End If
 
-        Dim DataIsOK As Boolean
-        Dim I As Short
-        DataIsOK = True
-        For I = 0 To NumberOfPoints.Value - 1
-            If pressureRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Or flowRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Then
-                DataIsOK = False
-                Exit For
-            End If
-        Next I
-        If DataIsOK = False Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slWarning, 4, "PQ Data is incomplete")
-        End If
+        'Dim DataIsOK As Boolean
+        'Dim I As Short
+        'DataIsOK = True
+        'For I = 0 To NumberOfPoints.Value - 1
+        '    If pressureRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Or flowRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Then
+        '        DataIsOK = False
+        '        Exit For
+        '    End If
+        'Next I
+        'If DataIsOK = False Then
+        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slWarning, 4, "PQ Data is incomplete")
+        'End If
 
-        'Check Specs Again
-        Dim specs As Integer
-        specs = 0
-        If Not edfInlet Is Nothing And Not edfPermeate Is Nothing Then
-            If edfInlet.StdGasFlow.IsKnown Then specs = specs + 1
-            If edfPermeate.StdGasFlow.IsKnown Then specs = specs + 1
-            If edfPermeate.Pressure.IsKnown Then specs = specs + 1
-        End If
+        ''Check Specs Again
+        'Dim specs As Integer
+        'specs = 0
+        'If Not edfInlet Is Nothing And Not edfPermeate Is Nothing Then
+        '    If edfInlet.StdGasFlow.IsKnown Then specs = specs + 1
+        '    If edfPermeate.StdGasFlow.IsKnown Then specs = specs + 1
+        '    If edfPermeate.Pressure.IsKnown Then specs = specs + 1
+        'End If
 
-        'Step 11 - If specs < 1, give a suitable status message.
-        If specs < 1 Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 5, "Requires 1 flow or pressure spec")
-        End If
+        ''Step 11 - If specs < 1, give a suitable status message.
+        'If specs < 1 Then
+        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 5, "Requires 1 flow or pressure spec")
+        'End If
 
         Exit Sub
 ErrorTrap:

@@ -49,7 +49,6 @@ Form Main
    Widget PageController
    Widget NameLabel
    Widget NameEntry
-   Widget Page1
    Widget InletSelector
    Widget RetentateSelector
    Widget PermInSelector
@@ -65,6 +64,7 @@ Form Main
    Widget PQPlotWidget
    Widget DeleteButton
    Widget CheckBox1
+   Widget Page1
    Version 1
    PageBottom Page1
 end
@@ -74,8 +74,7 @@ AttachmentName InletSelector
    TargetMoniker ":MaterialStreamObject.0.0(Inlet)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Feed Stream"
-   MatchByAbbrev
-   NoCreate
+   BlankText ""
 end
 
 AttachmentName RetentateSelector
@@ -83,8 +82,7 @@ AttachmentName RetentateSelector
    TargetMoniker ":MaterialStreamObject.0.0(Retentate)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Product Stream"
-   MatchByAbbrev
-   NoCreate
+   BlankText ""
 end
 
 AttachmentName PermInSelector
@@ -210,3 +208,57 @@ CheckBox CheckBox1
    FixToRight
 end
 
+~~Variables
+
+~~__PermeatorExtn.Permeator_PFDIcon
+
+PFDExtensionIcon main
+   Add Icon1
+end
+
+PFDIconNozzle Product1
+   Position 101 32 101 32
+   Arrow 8 left noshow
+   Moniker OperMaterialOut ":MaterialStreamObject.0.0(PermOut)"
+   Connection MaterialStreamOut "" ":"
+end
+
+PFDIconNozzle Product2
+  Position 60 21 60 21
+   Arrow 8 up noshow
+   Moniker OperMaterialOut ":MaterialStreamObject.0.0(NoPermOut)"
+   Connection MaterialStreamOut "" ":"
+end
+
+PFDIconNozzle Feed
+   Position 19 32 19 32
+   Arrow 8 right show
+   Moniker OperMaterialIn ":MaterialStreamObject.0.0(Inlet)"
+   Connection MaterialStreamIn "" ":"
+end
+
+PFDIconNozzle Feed2
+   Position 60 43 60 43
+   Arrow 8 down show
+   Moniker OperMaterialIn ":MaterialStreamObject.0.0(PermIn)"
+   Connection MaterialStreamIn "" ":"
+end
+
+PFDIconSection IconSection1
+   Nozzle Feed
+   Nozzle Feed2
+   Nozzle Product1
+   Nozzle Product2
+   Size 114 60
+   Cylinder3D Horizontal FullBorder 20 22 100 42
+   Line 20 42 100 22 line7
+end
+
+PFDIconInfo Icon1
+   ObjectType PermeatorExtn.Permeator
+   Name IconMain
+   BasePoint 84 20
+   Label 60 60 SE
+   Section IconSection1
+   ThreeD
+end
