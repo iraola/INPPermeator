@@ -2,7 +2,9 @@
 
 ExtensionVariables EV
    AttachmentVar "Inlet" "Inlet" "MaterialStreamObject" 0 Persistent AutoCompress Feed
-   AttachmentVar "NoPermOut" "NoPermOut" "MaterialStreamObject" 0 Persistent AutoCompress Product
+   AttachmentVar "Retentate" "Retentate" "MaterialStreamObject" 0 Persistent AutoCompress Product
+   AttachmentVar "PermIn" "PermIn" "MaterialStreamObject" 0 Persistent AutoCompress Feed
+   AttachmentVar "Permeate" "Permeate" "MaterialStreamObject" 0 Persistent AutoCompress Product
    RealVar "PressureData" "Pressure Data" "Pressure" 1 Persistent TriggerSolve
    RealVar "FlowData" "Flow Data" "StdGasFlow" 1 Persistent TriggerSolve
    RealVar "NumberOfPoints" "Number Of Points" "Index" 0 Persistent TriggerSolve
@@ -49,7 +51,9 @@ Form Main
    Widget NameEntry
    Widget Page1
    Widget InletSelector
-   Widget NoPermOutSelector
+   Widget RetentateSelector
+   Widget PermInSelector
+   Widget PermeateSelector
    Widget StaticText1
    Widget StaticText2
    Widget MatrixWidget1
@@ -66,7 +70,7 @@ Form Main
 end
 
 AttachmentName InletSelector
-   Area 28 40 75 12
+   Area 68 54 75 12
    TargetMoniker ":MaterialStreamObject.0.0(Inlet)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Feed Stream"
@@ -74,13 +78,27 @@ AttachmentName InletSelector
    NoCreate
 end
 
-AttachmentName NoPermOutSelector
-   Area 124 40 75 12
-   TargetMoniker ":MaterialStreamObject.0.0(NoPermOut)"
+AttachmentName RetentateSelector
+   Area 168 146 75 12
+   TargetMoniker ":MaterialStreamObject.0.0(Retentate)"
    SourceViewMgr PageController 1
    FlyByDescription "Select a Product Stream"
    MatchByAbbrev
    NoCreate
+end
+
+AttachmentName PermInSelector
+   Area 202 34 75 12
+   TargetMoniker ":MaterialStreamObject.0.0(PermIn)"
+   SourceViewMgr PageController 1
+   BlankText ""
+end
+
+AttachmentName PermeateSelector
+   Area 246 82 75 12
+   TargetMoniker ":MaterialStreamObject.0.0(Permeate)"
+   SourceViewMgr PageController 1
+   BlankText ""
 end
 
 StaticText StaticText1

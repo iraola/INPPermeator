@@ -10,8 +10,40 @@ Option Explicit On
 
     Private myContainer As HYSYS.ExtnUnitOperationContainer
     'Step 1 - Complete the variable declarations
-    Private Feed As HYSYS.ProcessStream
-    Private Product As HYSYS.ProcessStream
+    '***************************************************************************'
+    '                                                                           '
+    '                                 EDF Variables                             '
+    '                                                                           '
+    '***************************************************************************'
+    Private edfInlet As HYSYS.ProcessStream
+    Private edfPermeate As HYSYS.ProcessStream
+    Private edfRetentate As HYSYS.ProcessStream
+    Private edfPermIn As HYSYS.ProcessStream
+    'Private edfThick As InternalRealVariable
+    'Private edfDiam As InternalRealVariable
+    'Private edfLen As InternalRealVariable
+    'Private edfAperm As InternalRealVariable
+    'Private edfNtubes As InternalRealVariable
+    'Private edfn As InternalRealVariable
+    'Private edfDT As InternalRealVariable
+    'Private edfDH As InternalRealVariable
+    'Private edfComposition As InternalRealFlexVariable
+    'Private edfCompName As InternalTextFlexVariable
+    'Private edfStreamName As InternalTextFlexVariable
+    'Private edfVapFrac As InternalRealFlexVariable
+    'Private edfTemperature As InternalRealFlexVariable
+    'Private edfPressure As InternalRealFlexVariable
+    'Private edfMolFlow As InternalRealFlexVariable
+    'Private edfMassFlow As InternalRealFlexVariable
+    'Private edfPressDrop As InternalRealVariable
+    'Private edfPermPressDrop As InternalRealVariable
+    'Private edfDiamExt As InternalRealVariable
+    'Private edfLengthPos As InternalRealFlexVariable
+    'Private edfCompT As InternalRealFlexVariable
+    'Private edfCompH As InternalRealFlexVariable
+    'Private edfNpoints As InternalRealVariable
+    'Private edfk As InternalRealVariable
+
     Private pressureRFV As HYSYS.InternalRealFlexVariable
     Private flowRFV As HYSYS.InternalRealFlexVariable
     Private NumberOfPoints As HYSYS.InternalRealVariable
@@ -52,20 +84,19 @@ ErrorTrap:
 
 
         'Step 5 - Check that we have enough information to Calculate
-        If Feed Is Nothing Then Exit Sub
-        If Product Is Nothing Then Exit Sub
+        If edfInlet Is Nothing Then Exit Sub
+        If edfPermeate Is Nothing Then Exit Sub
+        If edfRetentate Is Nothing Then Exit Sub
         If NumberOfPoints.Value <= 1 Then Exit Sub
-        If Not Feed.Pressure.IsKnown Then Exit Sub
-        If Not Feed.Temperature.IsKnown And Not Product.Temperature.IsKnown Then Exit Sub
+        If Not edfInlet.Pressure.IsKnown Then Exit Sub
+        If Not edfInlet.Temperature.IsKnown And Not edfPermeate.Temperature.IsKnown Then Exit Sub
 
         'Check to see that a Composition is specified
         Dim bv As Object
         Dim k As Short
         Dim compOK As Boolean
         compOK = True
-        'UPGRADE_WARNING: Couldn't resolve default property of object Feed.ComponentMolarFraction.IsKnown. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        'UPGRADE_WARNING: Couldn't resolve default property of object bv. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        bv = Feed.ComponentMolarFraction.IsKnown
+        bv = edfInlet.ComponentMolarFraction.IsKnown
         For k = LBound(bv) To UBound(bv)
             'UPGRADE_WARNING: Couldn't resolve default property of object bv(k). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
             If bv(k) = False Then compOK = False
@@ -73,9 +104,7 @@ ErrorTrap:
         Next k
         If compOK = False Then
             compOK = True
-            'UPGRADE_WARNING: Couldn't resolve default property of object Product.ComponentMolarFraction.IsKnown. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-            'UPGRADE_WARNING: Couldn't resolve default property of object bv. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-            bv = Product.ComponentMolarFraction.IsKnown
+            bv = edfPermeate.ComponentMolarFraction.IsKnown
             For k = LBound(bv) To UBound(bv)
                 'UPGRADE_WARNING: Couldn't resolve default property of object bv(k). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 If bv(k) = False Then compOK = False
@@ -101,36 +130,36 @@ ErrorTrap:
         'Step 6 - Check the Flow and Pressure specs of the operation
         Dim specs As Integer
         specs = 0
-        If Feed.StdGasFlow.IsKnown Then specs = specs + 1
-        If Product.StdGasFlow.IsKnown Then specs = specs + 1
-        If Product.Pressure.IsKnown Then specs = specs + 1
+        If edfInlet.StdGasFlow.IsKnown Then specs = specs + 1
+        If edfPermeate.StdGasFlow.IsKnown Then specs = specs + 1
+        If edfPermeate.Pressure.IsKnown Then specs = specs + 1
 
         'Step 7 - If only one specifaction is known, then execute this code
         Dim press As Double
         Dim flow As Double
         If specs = 1 Then
-            If Product.Pressure.IsKnown Then
+            If edfPermeate.Pressure.IsKnown Then
                 'Calculate the Flow from the PQ Data
-                flow = LinearInterpolation(pressureRFV, flowRFV, (Product.Pressure))
-                Product.MolarFlow.Calculate(flow * 3600, "m3/h_(gas)")
-            ElseIf Product.StdGasFlow.IsKnown Then
+                flow = LinearInterpolation(pressureRFV, flowRFV, (edfPermeate.Pressure))
+                edfPermeate.MolarFlow.Calculate(flow * 3600, "m3/h_(gas)")
+            ElseIf edfPermeate.StdGasFlow.IsKnown Then
                 'Calculate the Pressure from the PQ Data
-                press = LinearInterpolation(flowRFV, pressureRFV, (Product.StdGasFlow))
-                Product.Pressure.Calculate(press)
+                press = LinearInterpolation(flowRFV, pressureRFV, (edfPermeate.StdGasFlow))
+                edfPermeate.Pressure.Calculate(press)
             Else
                 'Calculate the Pressure from the PQ Data
-                press = LinearInterpolation(flowRFV, pressureRFV, (Feed.StdGasFlow))
-                Product.Pressure.Calculate(press)
+                press = LinearInterpolation(flowRFV, pressureRFV, (edfInlet.StdGasFlow))
+                edfPermeate.Pressure.Calculate(press)
             End If
         End If
         'Step 8 - Complete the Balance code.
         Dim StreamsList(1) As HYSYS.ProcessStream
-        StreamsList(0) = Feed
-        StreamsList(1) = Product
+        StreamsList(0) = edfInlet
+        StreamsList(1) = edfPermeate
         myContainer.Balance(HYSYS.BalanceType_enum.btTotalBalance, 1, StreamsList)
 
         'Check if the Feed and Product streams are completely solved
-        If Feed.DuplicateFluid.IsUpToDate And Product.DuplicateFluid.IsUpToDate Then
+        If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate Then
             myContainer.SolveComplete()
         End If
         Exit Sub
@@ -142,21 +171,31 @@ ErrorTrap:
 
     Sub StatusQuery(ByRef Status As HYSYS.ObjectStatus)
         On Error GoTo ErrorTrap
-        'Step 9 - If the object is ignored then Exit the Subroutine
-        'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.ExtensionInterface.IsIgnored. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+        'If the object is ignored then Exit the Subroutine
         If myContainer.ExtensionInterface.IsIgnored Then Exit Sub
-
-        'Step 10 - Complete the following If ... Then statements. Hint: look at the error messsages
-        If Feed Is Nothing Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 1, "Requires an Inlet Stream")
+        'Error messsages
+        If edfInlet Is Nothing Then
+            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 1, "Feed stream is missing")
         End If
-
-        If Product Is Nothing Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 2, "Requires an Outlet Stream")
+        If edfPermeate Is Nothing Then
+            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 2, "Permeate stream is missing")
         End If
+        If edfRetentate Is Nothing Then
+            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 3, "Non permeating outlet stream is missing")
+        End If
+        'If edfLen < 0 Or edfDiam < 0 Or edfThick < 0 Or edfk < 0 Or edfNtubes < 0 Or edfAperm < 0 Then
+        '    Call Status.AddStatusCondition(slMissingRequiredInformation, 4, "Physical parameters missing or incorrect")
+        'End If
+        'If flagRet Then
+        '    Call Status.AddStatusCondition(slError, 5, "All feed flow is being permeated")
+        'End If
+        'If flagPerm Then
+        '    Call Status.AddStatusCondition(slError, 6, "No species permeating")
+        'End If
 
+        ' DELETE
         If NumberOfPoints.Value <= 1 Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 3, "Not enough PQ Data Points")
+            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 7, "Not enough PQ Data Points")
         End If
 
         Dim DataIsOK As Boolean
@@ -175,10 +214,10 @@ ErrorTrap:
         'Check Specs Again
         Dim specs As Integer
         specs = 0
-        If Not Feed Is Nothing And Not Product Is Nothing Then
-            If Feed.StdGasFlow.IsKnown Then specs = specs + 1
-            If Product.StdGasFlow.IsKnown Then specs = specs + 1
-            If Product.Pressure.IsKnown Then specs = specs + 1
+        If Not edfInlet Is Nothing And Not edfPermeate Is Nothing Then
+            If edfInlet.StdGasFlow.IsKnown Then specs = specs + 1
+            If edfPermeate.StdGasFlow.IsKnown Then specs = specs + 1
+            If edfPermeate.Pressure.IsKnown Then specs = specs + 1
         End If
 
         'Step 11 - If specs < 1, give a suitable status message.
@@ -192,8 +231,10 @@ ErrorTrap:
     End Sub
 
     Sub Terminate()
-        Feed = Nothing
-        Product = Nothing
+        edfInlet = Nothing
+        edfPermeate = Nothing
+        edfRetentate = Nothing
+        edfPermIn = Nothing
         pressureRFV = Nothing
         flowRFV = Nothing
         NumberOfPoints = Nothing
@@ -207,10 +248,6 @@ ErrorTrap:
         'edfAperm = Nothing
         'edfNtubes = Nothing
         'edfn = Nothing
-        'edfInlet = Nothing
-        'edfPermeate = Nothing
-        'edfRetentate = Nothing
-        'edfPermIn = Nothing
         'edfDT = Nothing
         'edfDH = Nothing
         'edfComposition = Nothing
@@ -245,13 +282,13 @@ ErrorTrap:
         Select Case Variable.Tag
             '%% Attachment variables
             Case "Inlet"
-                Feed = myContainer.FindVariable("Inlet").Variable.object
-            Case "PermOut"
-                'edfPermeate = myContainer.FindVariable("PermOut").Variable.object
-            Case "NoPermOut"
-                Product = myContainer.FindVariable("NoPermOut").Variable.object
+                edfInlet = myContainer.FindVariable("Inlet").Variable.object
+            Case "Permeate"
+                edfPermeate = myContainer.FindVariable("Permeate").Variable.object
+            Case "Retentate"
+                edfRetentate = myContainer.FindVariable("Retentate").Variable.object
             Case "PermIn"
-                'edfPermIn = myContainer.FindVariable("PermIn").Variable.object
+                edfPermIn = myContainer.FindVariable("PermIn").Variable.object
             Case "ActualizePlot"
                 'edfCompT.SetBounds(edfNpoints.Value + 1)
                 'edfCompH.SetBounds(edfNpoints.Value + 1)
@@ -365,16 +402,17 @@ ErrorTrap:
         VariableChanging = True
 
     End Function
-    Private Sub ExtnUnitOperation_BasisChanged()
-        Dim x As Integer
-        x = 1
+    Private Sub BasisChanged()
+        ' Not sure if this works, never saw it running
     End Sub
 
 
     Private Sub PointedEDFVariables()
         With myContainer
-            Feed = .FindVariable("Inlet").Variable.object
-            Product = .FindVariable("NoPermOut").Variable.object
+            edfInlet = .FindVariable("Inlet").Variable.object
+            edfPermeate = .FindVariable("Permeate").Variable.object
+            edfRetentate = .FindVariable("Retentate").Variable.object
+            edfPermIn = .FindVariable("PermIn").Variable.object
             pressureRFV = .FindVariable("PressureData").Variable
             flowRFV = .FindVariable("FlowData").Variable
             NumberOfPoints = .FindVariable("NumberOfPoints").Variable
@@ -384,10 +422,6 @@ ErrorTrap:
             'edfDiam = .FindVariable("Diam").Variable
             'edfAperm = .FindVariable("Aperm").Variable
             'edfNtubes = .FindVariable("Ntubes").Variable
-            'edfInlet = .FindVariable("Inlet").Variable.object
-            'edfPermeate = .FindVariable("PermOut").Variable.object
-            'edfRetentate = .FindVariable("NoPermOut").Variable.object
-            'edfPermIn = .FindVariable("PermIn").Variable.object
             'edfn = .FindVariable("n").Variable
             'edfDT = .FindVariable("DT").Variable
             'edfDH = .FindVariable("DH").Variable
