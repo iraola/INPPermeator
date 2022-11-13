@@ -192,70 +192,182 @@ ErrorTrap:
     End Sub
 
     Sub Terminate()
-        'UPGRADE_NOTE: Object Feed may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         Feed = Nothing
-        'UPGRADE_NOTE: Object Product may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         Product = Nothing
-        'UPGRADE_NOTE: Object pressureRFV may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         pressureRFV = Nothing
-        'UPGRADE_NOTE: Object flowRFV may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         flowRFV = Nothing
-        'UPGRADE_NOTE: Object NumberOfPoints may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         NumberOfPoints = Nothing
         myContainer.DeletePlot("PQPlot")
-        'UPGRADE_NOTE: Object myPlot may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         myPlot = Nothing
-        'UPGRADE_NOTE: Object myPlotName may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
         myPlotName = Nothing
+
+        'edfThick = Nothing
+        'edfLen = Nothing
+        'edfDiam = Nothing
+        'edfAperm = Nothing
+        'edfNtubes = Nothing
+        'edfn = Nothing
+        'edfInlet = Nothing
+        'edfPermeate = Nothing
+        'edfRetentate = Nothing
+        'edfPermIn = Nothing
+        'edfDT = Nothing
+        'edfDH = Nothing
+        'edfComposition = Nothing
+        'edfCompName = Nothing
+        'edfStreamName = Nothing
+        'edfVapFrac = Nothing
+        'edfTemperature = Nothing
+        'edfPressure = Nothing
+        'edfMolFlow = Nothing
+        'edfMassFlow = Nothing
+        'edfPressDrop = Nothing
+        'edfPermPressDrop = Nothing
+        'edfLengthPos = Nothing
+        'edfCompT = Nothing
+        'edfCompH = Nothing
+        'edfNpoints = Nothing
+        'myPlotH = Nothing
+        'myPlotNameH = Nothing
+        'myPlotT = Nothing
+        'myPlotNameT = Nothing
+        'edfDiamExt = Nothing
+        'edfk = Nothing
     End Sub
 
     Sub VariableChanged(ByRef Variable As HYSYS.InternalVariableWrapper)
+        ' Called when the user modifies any edf variable. It is required to update these variales as needed
 
         On Error GoTo ErrorTrap
         Dim pressureVT As Object
         Dim flowVT As Object
         Dim I As Short
         Select Case Variable.Tag
-
+            '%% Attachment variables
             Case "Inlet"
-                'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 Feed = myContainer.FindVariable("Inlet").Variable.object
+            Case "PermOut"
+                'edfPermeate = myContainer.FindVariable("PermOut").Variable.object
             Case "NoPermOut"
-                'UPGRADE_WARNING: Couldn't resolve default property of object myContainer.FindVariable().Variable.object. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 Product = myContainer.FindVariable("NoPermOut").Variable.object
+            Case "PermIn"
+                'edfPermIn = myContainer.FindVariable("PermIn").Variable.object
+            Case "ActualizePlot"
+                'edfCompT.SetBounds(edfNpoints.Value + 1)
+                'edfCompH.SetBounds(edfNpoints.Value + 1)
+                'edfLengthPos.SetBounds(edfNpoints.Value + 1)
+                'edfLengthPos.Values = GrafL
+                'edfCompT.Values = FpermCells
+                'edfCompH.Values = FpermCells
 
+            '%% Geometry variables
+            Case "Length"
+                'edfLen = myContainer.FindVariable("Length").Variable
+                'L = edfLen.Value * edfNtubes                    ' total length of tubes
+                '    ' Recalculation of cross-area and total volume
+                '    Area = pi * (Din ^ 2) / 4
+                '    Volume = L * Area
+                '    GrafL = LengthVector(edfLen, edfNpoints)
+                '    ' Recalculation of total permeation surface
+                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                '    edfAperm.SetValue L * (2 * pi * Ravg)
+                'Aperm = edfAperm.Value
+            Case "Diam"
+                'edfDiam = myContainer.FindVariable("Diam").Variable
+                'Din = edfDiam.GetValue
+                '    ' Recalculation of cross-area and total volume
+                '    Area = pi * (Din ^ 2) / 4
+                '    Volume = edfLen.Value * edfNtubes * Area
+                '    ' Recalculation of total permeation surface
+                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                '    edfAperm.SetValue L * (2 * pi * Ravg)
+                'Aperm = edfAperm.Value
+            Case "Thickness"
+                'edfThick = myContainer.FindVariable("Thickness").Variable
+                'thick = edfThick.Value
+                '    ' Recalculation of total permeation surface
+                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                '    edfAperm.SetValue L * (2 * pi * Ravg)
+                'Aperm = edfAperm.Value
+            Case "Aperm"
+                'edfAperm = myContainer.FindVariable("Aperm").Variable
+                'Aperm = edfAperm.Value
+                '    ' Recalculation of total permeation surface
+                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                '    L = Aperm / (2 * pi * Ravg)                     ' total length of tubes
+                '    edfLen.SetValue L / edfNtubes.GetValue
+                '' Recalculation of cross-area and total volume
+                '    Area = pi * (Din ^ 2) / 4
+                '    Volume = L * Area
+            Case "Ntubes"
+                'edfNtubes = myContainer.FindVariable("Ntubes").Variable
+                '' Recalculation of total length (mantaining length/tube (edfLen))
+                'L = edfLen.Value * edfNtubes
+                '    ' Recalculation of total permeation surface (last change affects area)
+                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                '    edfAperm.SetValue L * (2 * pi * Ravg)
+                'Aperm = edfAperm.Value
+                '    ' Recalculation of cross-area and total volume
+                '    Area = pi * (Din ^ 2) / 4
+                '    Volume = L * Area
+
+            '%% Pressure drop and others
+            Case "n"
+                'edfn = myContainer.FindVariable("n").Variable
+            Case "PressDrop"
+                'edfPressDrop = myContainer.FindVariable("PressDrop").Variable
+            Case "PermPressDrop"
+                'edfPermPressDrop = myContainer.FindVariable("PermPressDrop").Variable
+            Case "k"
+                'edfk = myContainer.FindVariable("k").Variable
             Case "NumberOfPoints"
-                'UPGRADE_WARNING: Couldn't resolve default property of object pressureRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object pressureVT. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                pressureVT = pressureRFV.Values
-                'UPGRADE_WARNING: Couldn't resolve default property of object flowRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object flowVT. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                flowVT = flowRFV.Values
+                'edfNpoints = myContainer.FindVariable("NumberOfPoints").Variable
+                'GrafL = LengthVector(edfLen, edfNpoints)
+
+            ' TO DELETE
+            Case "NumberOfPoints"
+                pressureVT = pressureRFV.ValuesflowVT = flowRFV.Values
                 ReDim Preserve pressureVT(NumberOfPoints.Value - 1)
                 ReDim Preserve flowVT(NumberOfPoints.Value - 1)
                 For I = LBound(flowVT) To UBound(flowVT)
-                    'UPGRADE_WARNING: IsEmpty was upgraded to IsNothing and has a new behavior. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="9B7D5ADD-D8FE-4819-A36C-6DEDAF088CC7"'
                     If IsNothing(flowVT(I)) Then
-                        'UPGRADE_WARNING: Couldn't resolve default property of object flowVT(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                         flowVT(I) = HYSYS.EmptyValue_enum.HEmpty
                     End If
-                    'UPGRADE_WARNING: IsEmpty was upgraded to IsNothing and has a new behavior. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="9B7D5ADD-D8FE-4819-A36C-6DEDAF088CC7"'
                     If IsNothing(pressureVT(I)) Then
-                        'UPGRADE_WARNING: Couldn't resolve default property of object pressureVT(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                         pressureVT(I) = HYSYS.EmptyValue_enum.HEmpty
                     End If
                 Next I
                 pressureRFV.SetBounds((NumberOfPoints.Value))
                 flowRFV.SetBounds((NumberOfPoints.Value))
-                'UPGRADE_WARNING: Couldn't resolve default property of object pressureVT. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 pressureRFV.Values = pressureVT
-                'UPGRADE_WARNING: Couldn't resolve default property of object flowVT. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
                 flowRFV.Values = flowVT
 
         End Select
         Exit Sub
 ErrorTrap:
+        myContainer.Trace(myContainer.name & ": Error in Variable Changed for variable " & Variable.Tag & ".", False)
         MsgBox("Variable Changed Error")
+    End Sub
+
+    Function VariableChanging(ByRef Variable As HYSYS.InternalVariableWrapper) As Boolean
+
+        Select Case Variable.Tag
+
+            Case "NumberOfPoints"
+                If Variable.NewRealValue < 2 Or Variable.NewRealValue > 100 Then
+                    MsgBox("Entered Value is out of range, must be between 2 and 100.")
+                    VariableChanging = False
+                    Exit Function
+                End If
+
+        End Select
+
+        VariableChanging = True
+
+    End Function
+    Private Sub ExtnUnitOperation_BasisChanged()
+        Dim x As Integer
+        x = 1
     End Sub
 
 
@@ -455,21 +567,4 @@ ErrorTrap:
         End With
 
     End Sub
-
-    Function VariableChanging(ByRef Variable As HYSYS.InternalVariableWrapper) As Boolean
-
-        Select Case Variable.Tag
-
-            Case "NumberOfPoints"
-                If Variable.NewRealValue < 2 Or Variable.NewRealValue > 100 Then
-                    MsgBox("Entered Value is out of range, must be between 2 and 100.")
-                    VariableChanging = False
-                    Exit Function
-                End If
-
-        End Select
-
-        VariableChanging = True
-
-    End Function
 End Class
