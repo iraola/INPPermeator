@@ -1,29 +1,32 @@
 Option Strict Off
 Option Explicit On
-<System.Runtime.InteropServices.ProgId("PermeatorExtn.Permeator")> Public Class Permeator
-    ' reference to the 2.1 type library has been set
-    ' change the project name and the class name in the VB _
-    'to reflect your entry in the Objects Manager _
-    'ProgID/CLSID field of the EDF such that the names _
-    'correspond to: _
-    '<project name>.<class name>
+Imports HYSYS
 
-    Private myContainer As HYSYS.ExtnUnitOperationContainer
-    'Step 1 - Complete the variable declarations
+<System.Runtime.InteropServices.ProgId("PermeatorExtn.Permeator")> Public Class Permeator
+
+    Private myContainer As ExtnUnitOperationContainer
     '***************************************************************************'
-    '                                                                           '
-    '                                 EDF Variables                             '
-    '                                                                           '
+    '                             VB Variables                                  '
     '***************************************************************************'
-    Private edfInlet As HYSYS.ProcessStream
-    Private edfPermeate As HYSYS.ProcessStream
-    Private edfRetentate As HYSYS.ProcessStream
-    Private edfPermIn As HYSYS.ProcessStream
-    'Private edfThick As InternalRealVariable
-    'Private edfDiam As InternalRealVariable
-    'Private edfLen As InternalRealVariable
-    'Private edfAperm As InternalRealVariable
-    'Private edfNtubes As InternalRealVariable
+    ' Plot
+    Dim myPlotNameH As InternalTextVariable
+    Dim myPlotH As TwoDimensionalPlot
+    Dim myPlotNameT As InternalTextVariable
+    Dim myPlotT As TwoDimensionalPlot
+
+    '***************************************************************************'
+    '                            EDF Variables                                  '
+    '***************************************************************************'
+    Private edfInlet As ProcessStream
+    Private edfPermeate As ProcessStream
+    Private edfRetentate As ProcessStream
+    Private edfPermIn As ProcessStream
+    Private edfThick As InternalRealVariable
+    Private edfDiam As InternalRealVariable
+    Private edfLen As InternalRealVariable
+    Private edfAperm As InternalRealVariable
+    Private edfNtubes As InternalRealVariable
+    Private edfk As InternalRealVariable
     'Private edfn As InternalRealVariable
     'Private edfDT As InternalRealVariable
     'Private edfDH As InternalRealVariable
@@ -42,33 +45,65 @@ Option Explicit On
     'Private edfCompT As InternalRealFlexVariable
     'Private edfCompH As InternalRealFlexVariable
     'Private edfNpoints As InternalRealVariable
-    'Private edfk As InternalRealVariable
 
-    Private pressureRFV As HYSYS.InternalRealFlexVariable
-    Private flowRFV As HYSYS.InternalRealFlexVariable
-    Private NumberOfPoints As HYSYS.InternalRealVariable
-    Dim myPlotName As HYSYS.InternalTextVariable
-    Dim myPlot As HYSYS.TwoDimensionalPlot
+    '***************************************************************************'
+    '                            Physical Variables                             '
+    '***************************************************************************'
+    ' Geometry
+    Dim L As Double, thick As Double, Din As Double, Aperm As Double
+    ' Volumes
+    Private Volume, Area As Double
+
+    '***************************************************************************'
+    '                           OLD - to be deleted                             '
+    '***************************************************************************'
+    Private pressureRFV As InternalRealFlexVariable
+    Private flowRFV As InternalRealFlexVariable
+    Private NumberOfPoints As InternalRealVariable
+    Dim myPlotName As InternalTextVariable
+    Dim myPlot As TwoDimensionalPlot
 
 
-
-    Public Function Initialize(ByRef Container As HYSYS.ExtnUnitOperationContainer, ByRef IsRecalling As Boolean) As Integer
-
+    Public Function Initialize(ByRef Container As ExtnUnitOperationContainer, ByRef IsRecalling As Boolean) As Integer
+        Dim IRV As InternalRealVariable
         On Error GoTo ErrorTrap
         ' Initialize container
         myContainer = Container
         ' Initialize EDF variables
         Call PointedEDFVariables()
-
         ' Recall check
         If Not IsRecalling Then
             'Step 3 - set the NumberOfPoints variable to 0.
             NumberOfPoints.Value = 0
+        Else
+            ' Visibility controllers
+            IRV = myContainer.FindVariable("Design_enum").Variable
+            IRV.Value = 0
+            'Set the initial num value: Karlsruhe experiment for WDS and TEP (Welte, 2009)
+            thick = 0.0001              'm
+            edfThick.SetValue(thick)
+            Din = 0.0023                'm
+            edfDiam.SetValue(Din)
+            edfNtubes.SetValue(183)      '-
+            edfLen.SetValue(0.9)         'm
+            L = edfLen.GetValue * edfNtubes.GetValue
+            Dim Ravg As Double
+            Ravg = ((Din + (Din + 2 * thick)) / 2) / 2
+            Aperm = L * (2 * Math.PI * Ravg)
+            edfAperm.SetValue(Aperm)     'm2
         End If
-
+        ' Global variables: first calculation
+        thick = edfThick.GetValue
+        Din = edfDiam.GetValue
+        Aperm = edfAperm.GetValue
+        Area = Math.PI * (Din ^ 2) / 4
+        L = edfLen.GetValue * edfNtubes.GetValue
+        Volume = L * Area
         Call CreatePlot()
-
-        Initialize = HYSYS.CurrentExtensionVersion_enum.extnCurrentVersion
+        ' Loop for setting index for components of interest (based on Inlet's basis manager)
+        ' ******************************************** Call iniCompIndex
+        ' Return Initialize
+        Initialize = CurrentExtensionVersion_enum.extnCurrentVersion
         Exit Function
 
 ErrorTrap:
@@ -120,7 +155,7 @@ ErrorTrap:
         Dim I As Short
         DataIsOK = True
         For I = 0 To NumberOfPoints.Value - 1
-            If pressureRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Or flowRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Then
+            If pressureRFV.Values(I) = EmptyValue_enum.HEmpty Or flowRFV.Values(I) = EmptyValue_enum.HEmpty Then
                 DataIsOK = False
                 Exit For
             End If
@@ -130,9 +165,9 @@ ErrorTrap:
         'Step 6 - Check the Flow and Pressure specs of the operation
         Dim specs As Integer
         specs = 0
-        If edfInlet.StdGasFlow.IsKnown Then specs = specs + 1
-        If edfPermeate.StdGasFlow.IsKnown Then specs = specs + 1
-        If edfPermeate.Pressure.IsKnown Then specs = specs + 1
+        If edfInlet.StdGasFlow.IsKnown Then specs += 1
+        If edfPermeate.StdGasFlow.IsKnown Then specs += 1
+        If edfPermeate.Pressure.IsKnown Then specs += 1
 
         'Step 7 - If only one specifaction is known, then execute this code
         Dim press As Double
@@ -153,10 +188,10 @@ ErrorTrap:
             End If
         End If
         'Step 8 - Complete the Balance code.
-        Dim StreamsList(1) As HYSYS.ProcessStream
+        Dim StreamsList(1) As ProcessStream
         StreamsList(0) = edfInlet
         StreamsList(1) = edfPermeate
-        myContainer.Balance(HYSYS.BalanceType_enum.btTotalBalance, 1, StreamsList)
+        myContainer.Balance(BalanceType_enum.btTotalBalance, 1, StreamsList)
 
         'Check if the Feed and Product streams are completely solved
         If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate Then
@@ -169,23 +204,23 @@ ErrorTrap:
 
 
 
-    Sub StatusQuery(ByRef Status As HYSYS.ObjectStatus)
+    Sub StatusQuery(ByRef Status As ObjectStatus)
         On Error GoTo ErrorTrap
         'If the object is ignored then Exit the Subroutine
         If myContainer.ExtensionInterface.IsIgnored Then Exit Sub
         'Error messsages
         If edfInlet Is Nothing Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 1, "Feed stream is missing")
+            Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 1, "Feed stream is missing")
         End If
         If edfPermeate Is Nothing Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 2, "Permeate stream is missing")
+            Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 2, "Permeate stream is missing")
         End If
         If edfRetentate Is Nothing Then
-            Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 3, "Non permeating outlet stream is missing")
+            Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 3, "Non permeating outlet stream is missing")
         End If
-        'If edfLen < 0 Or edfDiam < 0 Or edfThick < 0 Or edfk < 0 Or edfNtubes < 0 Or edfAperm < 0 Then
-        '    Call Status.AddStatusCondition(slMissingRequiredInformation, 4, "Physical parameters missing or incorrect")
-        'End If
+        If edfLen.Value < 0 Or edfDiam.Value < 0 Or edfThick.Value < 0 Or edfk.Value < 0 Or edfNtubes.Value < 0 Or edfAperm.Value < 0 Then
+            Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 4, "Physical parameters missing or incorrect")
+        End If
         'If flagRet Then
         '    Call Status.AddStatusCondition(slError, 5, "All feed flow is being permeated")
         'End If
@@ -195,20 +230,20 @@ ErrorTrap:
 
         '' DELETE
         'If NumberOfPoints.Value <= 1 Then
-        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 7, "Not enough PQ Data Points")
+        '    Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 7, "Not enough PQ Data Points")
         'End If
 
         'Dim DataIsOK As Boolean
         'Dim I As Short
         'DataIsOK = True
         'For I = 0 To NumberOfPoints.Value - 1
-        '    If pressureRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Or flowRFV.Values(I) = HYSYS.EmptyValue_enum.HEmpty Then
+        '    If pressureRFV.Values(I) = EmptyValue_enum.HEmpty Or flowRFV.Values(I) = EmptyValue_enum.HEmpty Then
         '        DataIsOK = False
         '        Exit For
         '    End If
         'Next I
         'If DataIsOK = False Then
-        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slWarning, 4, "PQ Data is incomplete")
+        '    Call Status.AddStatusCondition(StatusLevel_enum.slWarning, 4, "PQ Data is incomplete")
         'End If
 
         ''Check Specs Again
@@ -222,7 +257,7 @@ ErrorTrap:
 
         ''Step 11 - If specs < 1, give a suitable status message.
         'If specs < 1 Then
-        '    Call Status.AddStatusCondition(HYSYS.StatusLevel_enum.slMissingRequiredInformation, 5, "Requires 1 flow or pressure spec")
+        '    Call Status.AddStatusCondition(StatusLevel_enum.slMissingRequiredInformation, 5, "Requires 1 flow or pressure spec")
         'End If
 
         Exit Sub
@@ -242,11 +277,12 @@ ErrorTrap:
         myPlot = Nothing
         myPlotName = Nothing
 
-        'edfThick = Nothing
-        'edfLen = Nothing
-        'edfDiam = Nothing
-        'edfAperm = Nothing
-        'edfNtubes = Nothing
+        edfThick = Nothing
+        edfLen = Nothing
+        edfDiam = Nothing
+        edfAperm = Nothing
+        edfNtubes = Nothing
+        edfk = Nothing
         'edfn = Nothing
         'edfDT = Nothing
         'edfDH = Nothing
@@ -264,21 +300,21 @@ ErrorTrap:
         'edfCompT = Nothing
         'edfCompH = Nothing
         'edfNpoints = Nothing
-        'myPlotH = Nothing
-        'myPlotNameH = Nothing
-        'myPlotT = Nothing
-        'myPlotNameT = Nothing
+        myPlotH = Nothing
+        myPlotNameH = Nothing
+        myPlotT = Nothing
+        myPlotNameT = Nothing
         'edfDiamExt = Nothing
-        'edfk = Nothing
     End Sub
 
-    Sub VariableChanged(ByRef Variable As HYSYS.InternalVariableWrapper)
+    Sub VariableChanged(ByRef Variable As InternalVariableWrapper)
         ' Called when the user modifies any edf variable. It is required to update these variales as needed
 
         On Error GoTo ErrorTrap
         Dim pressureVT As Object
         Dim flowVT As Object
         Dim I As Short
+        Dim Ravg As Double
         Select Case Variable.Tag
             '%% Attachment variables
             Case "Inlet"
@@ -299,54 +335,55 @@ ErrorTrap:
 
             '%% Geometry variables
             Case "Length"
-                'edfLen = myContainer.FindVariable("Length").Variable
-                'L = edfLen.Value * edfNtubes                    ' total length of tubes
-                '    ' Recalculation of cross-area and total volume
-                '    Area = pi * (Din ^ 2) / 4
-                '    Volume = L * Area
-                '    GrafL = LengthVector(edfLen, edfNpoints)
-                '    ' Recalculation of total permeation surface
-                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                '    edfAperm.SetValue L * (2 * pi * Ravg)
-                'Aperm = edfAperm.Value
+                edfLen = myContainer.FindVariable("Length").Variable
+                L = edfLen.Value * edfNtubes.Value                    ' total length of tubes
+                ' Recalculation of cross-area and total volume
+                Area = Math.PI * (Din ^ 2) / 4
+                Volume = L * Area
+                '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''' GrafL = LengthVector(edfLen, edfNpoints)
+                ' Recalculation of total permeation surface
+                Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                edfAperm.SetValue(L * (2 * Math.PI * Ravg))
+                Aperm = edfAperm.Value
             Case "Diam"
-                'edfDiam = myContainer.FindVariable("Diam").Variable
-                'Din = edfDiam.GetValue
-                '    ' Recalculation of cross-area and total volume
-                '    Area = pi * (Din ^ 2) / 4
-                '    Volume = edfLen.Value * edfNtubes * Area
-                '    ' Recalculation of total permeation surface
-                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                '    edfAperm.SetValue L * (2 * pi * Ravg)
-                'Aperm = edfAperm.Value
+                edfDiam = myContainer.FindVariable("Diam").Variable
+                Din = edfDiam.GetValue
+                ' Recalculation of cross-area and total volume
+                Area = Math.PI * (Din ^ 2) / 4
+                Volume = edfLen.Value * edfNtubes.Value * Area
+                ' Recalculation of total permeation surface
+                Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                edfAperm.SetValue(L * (2 * Math.PI * Ravg))
+                Aperm = edfAperm.Value
             Case "Thickness"
-                'edfThick = myContainer.FindVariable("Thickness").Variable
-                'thick = edfThick.Value
-                '    ' Recalculation of total permeation surface
-                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                '    edfAperm.SetValue L * (2 * pi * Ravg)
-                'Aperm = edfAperm.Value
+                edfThick = myContainer.FindVariable("Thickness").Variable
+                thick = edfThick.Value
+                ' Recalculation of total permeation surface
+                Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                edfAperm.SetValue(L * (2 * Math.PI * Ravg))
+                Aperm = edfAperm.Value
             Case "Aperm"
-                'edfAperm = myContainer.FindVariable("Aperm").Variable
-                'Aperm = edfAperm.Value
-                '    ' Recalculation of total permeation surface
-                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                '    L = Aperm / (2 * pi * Ravg)                     ' total length of tubes
-                '    edfLen.SetValue L / edfNtubes.GetValue
-                '' Recalculation of cross-area and total volume
-                '    Area = pi * (Din ^ 2) / 4
-                '    Volume = L * Area
+                edfAperm = myContainer.FindVariable("Aperm").Variable
+                Aperm = edfAperm.Value
+                ' Recalculation of total permeation surface
+                Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                L = Aperm / (2 * Math.PI * Ravg)                     ' total length of tubes
+                edfLen.SetValue(L / edfNtubes.GetValue)
+                ' Recalculation of cross-area and total volume
+                Area = Math.PI * (Din ^ 2) / 4
+                Volume = L * Area
             Case "Ntubes"
-                'edfNtubes = myContainer.FindVariable("Ntubes").Variable
-                '' Recalculation of total length (mantaining length/tube (edfLen))
-                'L = edfLen.Value * edfNtubes
-                '    ' Recalculation of total permeation surface (last change affects area)
-                '    Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
-                '    edfAperm.SetValue L * (2 * pi * Ravg)
-                'Aperm = edfAperm.Value
-                '    ' Recalculation of cross-area and total volume
-                '    Area = pi * (Din ^ 2) / 4
-                '    Volume = L * Area
+                edfNtubes = myContainer.FindVariable("Ntubes").Variable
+                ' Recalculation of total length (mantaining length/tube (edfLen))
+                Dim len As Double
+                L = edfLen.Value * edfNtubes.Value
+                ' Recalculation of total permeation surface (last change affects area)
+                Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
+                edfAperm.SetValue(L * (2 * Math.PI * Ravg))
+                Aperm = edfAperm.Value
+                ' Recalculation of cross-area and total volume
+                Area = Math.PI * (Din ^ 2) / 4
+                Volume = L * Area
 
             '%% Pressure drop and others
             Case "n"
@@ -356,28 +393,10 @@ ErrorTrap:
             Case "PermPressDrop"
                 'edfPermPressDrop = myContainer.FindVariable("PermPressDrop").Variable
             Case "k"
-                'edfk = myContainer.FindVariable("k").Variable
+                edfk = myContainer.FindVariable("k").Variable
             Case "NumberOfPoints"
                 'edfNpoints = myContainer.FindVariable("NumberOfPoints").Variable
                 'GrafL = LengthVector(edfLen, edfNpoints)
-
-            ' TO DELETE
-            Case "NumberOfPoints"
-                pressureVT = pressureRFV.ValuesflowVT = flowRFV.Values
-                ReDim Preserve pressureVT(NumberOfPoints.Value - 1)
-                ReDim Preserve flowVT(NumberOfPoints.Value - 1)
-                For I = LBound(flowVT) To UBound(flowVT)
-                    If IsNothing(flowVT(I)) Then
-                        flowVT(I) = HYSYS.EmptyValue_enum.HEmpty
-                    End If
-                    If IsNothing(pressureVT(I)) Then
-                        pressureVT(I) = HYSYS.EmptyValue_enum.HEmpty
-                    End If
-                Next I
-                pressureRFV.SetBounds((NumberOfPoints.Value))
-                flowRFV.SetBounds((NumberOfPoints.Value))
-                pressureRFV.Values = pressureVT
-                flowRFV.Values = flowVT
 
         End Select
         Exit Sub
@@ -386,7 +405,7 @@ ErrorTrap:
         MsgBox("Variable Changed Error")
     End Sub
 
-    Function VariableChanging(ByRef Variable As HYSYS.InternalVariableWrapper) As Boolean
+    Function VariableChanging(ByRef Variable As InternalVariableWrapper) As Boolean
 
         Select Case Variable.Tag
 
@@ -417,11 +436,12 @@ ErrorTrap:
             flowRFV = .FindVariable("FlowData").Variable
             NumberOfPoints = .FindVariable("NumberOfPoints").Variable
             myPlotName = .FindVariable("PlotName").Variable
-            'edfThick = .FindVariable("Thickness").Variable
-            'edfLen = .FindVariable("Length").Variable
-            'edfDiam = .FindVariable("Diam").Variable
-            'edfAperm = .FindVariable("Aperm").Variable
-            'edfNtubes = .FindVariable("Ntubes").Variable
+            edfThick = .FindVariable("Thickness").Variable
+            edfLen = .FindVariable("Length").Variable
+            edfDiam = .FindVariable("Diam").Variable
+            edfAperm = .FindVariable("Aperm").Variable
+            edfNtubes = .FindVariable("Ntubes").Variable
+            edfk = .FindVariable("k").Variable
             'edfn = .FindVariable("n").Variable
             'edfDT = .FindVariable("DT").Variable
             'edfDH = .FindVariable("DH").Variable
@@ -439,15 +459,31 @@ ErrorTrap:
             'edfCompT = .FindVariable("CompT").Variable
             'edfCompH = .FindVariable("CompH").Variable
             'edfNpoints = .FindVariable("NumberOfPoints").Variable
-            'myPlotNameH = .FindVariable("PlotNameH").Variable
-            'myPlotNameT = .FindVariable("PlotNameT").Variable
+            myPlotNameH = .FindVariable("PlotNameH").Variable
+            myPlotNameT = .FindVariable("PlotNameT").Variable
             'edfDiamExt = .FindVariable("DiamExtern").Variable
             ''molDensity = .FindVariable("molDensity").Variable
-            'edfk = .FindVariable("k").Variable
         End With
     End Sub
 
-    Function LinearInterpolation(ByRef xDataRFV As HYSYS.InternalRealFlexVariable, ByRef yDataRFV As HYSYS.InternalRealFlexVariable, ByRef xPoint As HYSYS.RealVariable) As Double
+
+
+    '***************************************************************************'
+    '                         Auxiliary Functions                               '
+    '***************************************************************************'
+    Private Function LengthVector(L, n) As Double()
+        ' Builds a vector of equidistant elements representing the position [m] of each cell
+        Dim i As Long
+        Dim lenvec() As Double, dx As Double
+        ReDim lenvec(n - 1)
+        dx = L / n
+        lenvec(0) = dx
+        For i = 1 To n - 1
+            lenvec(i) = lenvec(i - 1) + dx
+        Next i
+        LengthVector = lenvec
+    End Function
+    Function LinearInterpolation(ByRef xDataRFV As InternalRealFlexVariable, ByRef yDataRFV As InternalRealFlexVariable, ByRef xPoint As RealVariable) As Double
         'This method linear interpolates to find the y point that coresponds to the known
         'x point for the given x and y data sets.
 
@@ -462,7 +498,7 @@ ErrorTrap:
         Dim Low As Integer
         Dim number As Integer
 
-        y = HYSYS.EmptyValue_enum.HEmpty
+        y = EmptyValue_enum.HEmpty
         LinearInterpolation = y
 
         'UPGRADE_WARNING: Couldn't resolve default property of object xDataRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
@@ -572,33 +608,44 @@ ErrorTrap:
     End Sub
 
     Sub CreatePlot()
-
-        If Not myPlot Is Nothing Then
-            myContainer.DeletePlot("PQPlot")
-            'UPGRADE_NOTE: Object myPlot may not be destroyed until it is garbage collected. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6E35BFF6-CD74-4B09-9689-3E1A43DF8969"'
-            myPlot = Nothing
+        If myPlotH IsNot Nothing Then
+            myContainer.DeletePlot("LCPlotH")
+            myPlotH = Nothing
         End If
+        myContainer.BuildPlot2("LCPlotH", myPlotH, HPlotType_enum.hptTwoDimensionalPlot)
+        myPlotNameH.Value = "LCPlotH"
+        With myPlotH
+            .TitleData = "Length vs Non Permeation"
+            .SetAxisLabelData(HAxisType_enum.hatXAxis, "Length (m)")
+            .SetAxisLabelData(HAxisType_enum.hatYAxis, "NoPerm Flow")
+            .SetAxisLabelVisible(HAxisType_enum.hatXAxis, True)
+            .SetAxisLabelVisible(HAxisType_enum.hatYAxis, True)
+            .LegendVisible = True
+            .CreateXYDataSet(1, "PQData")
+            ''''''''''''''''''''''''''''''''''' .SetDataSetXData(1, edfLengthPos)
+            ''''''''''''''''''''''''''''''''''' .SetDataSetYData(1, edfCompH)
+            .SetDataSetColour(1, "Red")
+        End With
+        If myPlotT IsNot Nothing Then
+            myContainer.DeletePlot("LCPlotT")
+            myPlotT = Nothing
+        End If
+        myContainer.BuildPlot2("LCPlotT", myPlotT, HPlotType_enum.hptTwoDimensionalPlot)
+        myPlotNameT.Value = "LCPlotT"
+        With myPlotT
+            .TitleData = "Length vs Permeation"
 
-        'UPGRADE_WARNING: Couldn't resolve default property of object myPlot. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        myContainer.BuildPlot2("PQPlot", myPlot, HYSYS.HPlotType_enum.hptTwoDimensionalPlot)
-        myPlotName.Value = "PQPlot"
-
-        With myPlot
-            .TitleData = "Wellhead PQ Relationship"
-
-            .SetAxisLabelData(HYSYS.HAxisType_enum.hatXAxis, "Flow")
-            .SetAxisLabelData(HYSYS.HAxisType_enum.hatYAxis, "Pressure")
-            .SetAxisLabelVisible(HYSYS.HAxisType_enum.hatXAxis, True)
-            .SetAxisLabelVisible(HYSYS.HAxisType_enum.hatYAxis, True)
+            .SetAxisLabelData(HAxisType_enum.hatXAxis, "Length (m)")
+            .SetAxisLabelData(HAxisType_enum.hatYAxis, "Perm Flow")
+            .SetAxisLabelVisible(HAxisType_enum.hatXAxis, True)
+            .SetAxisLabelVisible(HAxisType_enum.hatYAxis, True)
 
             .LegendVisible = True
 
             .CreateXYDataSet(1, "PQData")
-            .SetDataSetXData(1, flowRFV)
-            .SetDataSetYData(1, pressureRFV)
+            '''''''''''''''''''''''''''''''''''.SetDataSetXData(1, edfLengthPos)
+            '''''''''''''''''''''''''''''''''''.SetDataSetYData(1, edfCompT)
             .SetDataSetColour(1, "Red")
-
         End With
-
     End Sub
 End Class
