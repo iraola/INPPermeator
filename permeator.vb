@@ -8,6 +8,11 @@ Imports HYSYS
     '***************************************************************************'
     '                             VB Variables                                  '
     '***************************************************************************'
+    ' Indices of permeated components
+    Private idxH2 As Long, idxHD As Long, idxHT As Long
+    Private idxD2 As Long, idxDT As Long, idxT2 As Long
+    ' Permeation error flags
+    Private flagRet As Boolean, flagPerm As Boolean
     ' Plot
     Dim myPlotNameH As InternalTextVariable
     Dim myPlotH As TwoDimensionalPlot
@@ -38,13 +43,13 @@ Imports HYSYS
     'Private edfPressure As InternalRealFlexVariable
     'Private edfMolFlow As InternalRealFlexVariable
     'Private edfMassFlow As InternalRealFlexVariable
-    'Private edfPressDrop As InternalRealVariable
-    'Private edfPermPressDrop As InternalRealVariable
+    Private edfPressDrop As InternalRealVariable
+    Private edfPermPressDrop As InternalRealVariable
     'Private edfDiamExt As InternalRealVariable
     'Private edfLengthPos As InternalRealFlexVariable
     'Private edfCompT As InternalRealFlexVariable
     'Private edfCompH As InternalRealFlexVariable
-    'Private edfNpoints As InternalRealVariable
+    Private edfNpoints As InternalRealVariable
 
     '***************************************************************************'
     '                            Physical Variables                             '
@@ -52,7 +57,13 @@ Imports HYSYS
     ' Geometry
     Dim L As Double, thick As Double, Din As Double, Aperm As Double
     ' Volumes
-    Private Volume, Area As Double
+    Private Volume As Double, Area As Double
+    ' Streams
+    Dim fluidList() As Fluid
+    Dim StreamList() As ProcessStream
+    ' Constants
+    Private Const R As Double = 8.314472  ' [kJ/kmol·K]
+    Private Const MOLFLOW_UNITS As String = "kgmole/s"
 
     '***************************************************************************'
     '                           OLD - to be deleted                             '
@@ -86,18 +97,18 @@ Imports HYSYS
             edfDiam.SetValue(Din)
             edfNtubes.SetValue(183)      '-
             edfLen.SetValue(0.9)         'm
-            L = edfLen.GetValue * edfNtubes.GetValue
+            L = edfLen.GetValue() * edfNtubes.GetValue()
             Dim Ravg As Double
             Ravg = ((Din + (Din + 2 * thick)) / 2) / 2
             Aperm = L * (2 * Math.PI * Ravg)
             edfAperm.SetValue(Aperm)     'm2
         End If
         ' Global variables: first calculation
-        thick = edfThick.GetValue
-        Din = edfDiam.GetValue
-        Aperm = edfAperm.GetValue
+        thick = edfThick.GetValue()
+        Din = edfDiam.GetValue()
+        Aperm = edfAperm.GetValue()
         Area = Math.PI * (Din ^ 2) / 4
-        L = edfLen.GetValue * edfNtubes.GetValue
+        L = edfLen.GetValue() * edfNtubes.GetValue()
         Volume = L * Area
         Call CreatePlot()
         ' Loop for setting index for components of interest (based on Inlet's basis manager)
@@ -113,12 +124,15 @@ ErrorTrap:
     Public Sub Execute(ByRef Forgetting As Boolean)
         ' execute gets hit twice, once on a forgetting pass and then on _
         'a calculate pass
+        Dim flashPerm As Double, flashNoPerm As Double
+        Dim Tin As Double
+        Dim i As Long, nComp As Long
         On Error GoTo ErrorTrap
 
+        ' Step 1 - Forgetting check
         If Forgetting Then Exit Sub
 
-
-        'Step 5 - Check that we have enough information to Calculate
+        ' Step 2 - Check that we have enough information to Calculate
         If edfInlet Is Nothing Then Exit Sub
         If edfPermeate Is Nothing Then Exit Sub
         If edfRetentate Is Nothing Then Exit Sub
@@ -126,80 +140,89 @@ ErrorTrap:
         If Not edfInlet.Pressure.IsKnown Then Exit Sub
         If Not edfInlet.Temperature.IsKnown And Not edfPermeate.Temperature.IsKnown Then Exit Sub
 
-        'Check to see that a Composition is specified
-        Dim bv As Object
-        Dim k As Short
-        Dim compOK As Boolean
-        compOK = True
-        bv = edfInlet.ComponentMolarFraction.IsKnown
-        For k = LBound(bv) To UBound(bv)
-            'UPGRADE_WARNING: Couldn't resolve default property of object bv(k). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-            If bv(k) = False Then compOK = False
-            Exit For
-        Next k
-        If compOK = False Then
-            compOK = True
-            bv = edfPermeate.ComponentMolarFraction.IsKnown
-            For k = LBound(bv) To UBound(bv)
-                'UPGRADE_WARNING: Couldn't resolve default property of object bv(k). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                If bv(k) = False Then compOK = False
-                Exit For
-            Next k
+        ' Step 3 - Build vector of Streams and Fluids (StreamList and fluidList)
+        ReDim Preserve StreamList(0 To 2)
+        StreamList(0) = edfInlet                ' In
+        StreamList(1) = edfRetentate            ' Out non Permeated
+        StreamList(2) = edfPermeate             ' Out Permeated
+        If edfPermIn IsNot Nothing Then         ' (optional) 2nd stream in
+            ReDim Preserve StreamList(0 To 3)
+            StreamList(3) = edfPermIn
         End If
-        If compOK = False Then Exit Sub
+        ReDim Preserve fluidList(0 To UBound(StreamList))
+        For i = 0 To UBound(StreamList)
+            fluidList(i) = StreamList(i).DuplicateFluid
+        Next i
 
+        ' Step 4 - Calculate Permeation
+        'Dim aux() As Double
+        'ReDim aux(nComp - 1)
+        'aux = Permeation() ' kmol/s
+        'PermeationT = aux(idxT2)
+        'PermeationH = aux(idxH2)
 
+        ' Step 5 - Set the calculated values to the list of fluids and product streams
+        'fluidList = setProductFluids(fluidList, PermeationT, PermeationH)
+        fluidList = SetProductFluids(fluidList, 0.000001, 0)
+        edfRetentate.ComponentMolarFlow.Calculate(fluidList(1).MolarFlowsValue(), MOLFLOW_UNITS)
+        edfPermeate.ComponentMolarFlow.Calculate(fluidList(2).MolarFlowsValue(), MOLFLOW_UNITS)
+        edfRetentate.MolarFlow.Calculate(fluidList(1).MolarFlowValue(), MOLFLOW_UNITS)
+        edfPermeate.MolarFlow.Calculate(fluidList(2).MolarFlowValue(), MOLFLOW_UNITS)
+        ' SET HERE ALSO MOLAR FLOW
 
-        'Check that all pressure flow data is valid
-        Dim DataIsOK As Boolean
-        Dim I As Short
-        DataIsOK = True
-        For I = 0 To NumberOfPoints.Value - 1
-            If pressureRFV.Values(I) = EmptyValue_enum.HEmpty Or flowRFV.Values(I) = EmptyValue_enum.HEmpty Then
-                DataIsOK = False
-                Exit For
-            End If
-        Next I
-        If Not DataIsOK Then Exit Sub
-
-        'Step 6 - Check the Flow and Pressure specs of the operation
-        Dim specs As Integer
-        specs = 0
-        If edfInlet.StdGasFlow.IsKnown Then specs += 1
-        If edfPermeate.StdGasFlow.IsKnown Then specs += 1
-        If edfPermeate.Pressure.IsKnown Then specs += 1
-
-        'Step 7 - If only one specifaction is known, then execute this code
-        Dim press As Double
-        Dim flow As Double
-        If specs = 1 Then
-            If edfPermeate.Pressure.IsKnown Then
-                'Calculate the Flow from the PQ Data
-                flow = LinearInterpolation(pressureRFV, flowRFV, (edfPermeate.Pressure))
-                edfPermeate.MolarFlow.Calculate(flow * 3600, "m3/h_(gas)")
-            ElseIf edfPermeate.StdGasFlow.IsKnown Then
-                'Calculate the Pressure from the PQ Data
-                press = LinearInterpolation(flowRFV, pressureRFV, (edfPermeate.StdGasFlow))
-                edfPermeate.Pressure.Calculate(press)
-            Else
-                'Calculate the Pressure from the PQ Data
-                press = LinearInterpolation(flowRFV, pressureRFV, (edfInlet.StdGasFlow))
-                edfPermeate.Pressure.Calculate(press)
-            End If
+        ' Step 6 - Pressure Drop and Flash Calculation
+        ' TODO: Do we need flash?? (aspentech's membrane extension does not use it)
+        ' Non-permeated flow (1)
+        Tin = edfInlet.Temperature.GetValue()
+        If edfPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
+            flashNoPerm = fluidList(1).TPFlash(Tin, fluidList(0).PressureValue - edfPressDrop.Value)
+            edfRetentate.Pressure.Calculate(fluidList(1).PressureValue)
+        ElseIf fluidList(0).Pressure.IsKnown And fluidList(1).Pressure.IsKnown Then
+            flashNoPerm = fluidList(1).TPFlash(Tin, fluidList(1).PressureValue)
+            edfPressDrop.Calculate(fluidList(0).PressureValue - fluidList(1).PressureValue)
+        Else
+            Exit Sub
         End If
-        'Step 8 - Complete the Balance code.
-        Dim StreamsList(1) As ProcessStream
-        StreamsList(0) = edfInlet
-        StreamsList(1) = edfPermeate
-        myContainer.Balance(BalanceType_enum.btTotalBalance, 1, StreamsList)
+        ' Permeated flow (2)
+        If edfPermPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
+            flashPerm = fluidList(2).TPFlash(Tin, fluidList(0).PressureValue - edfPermPressDrop.Value)
+            edfPermeate.Pressure.Calculate(fluidList(2).PressureValue)
+        ElseIf fluidList(0).Pressure.IsKnown And fluidList(2).Pressure.IsKnown Then
+            flashPerm = fluidList(2).flash.TPFlash(Tin, fluidList(2).PressureValue)
+            edfPermPressDrop.Calculate(fluidList(0).PressureValue - fluidList(2).PressureValue)
+        Else
+            Exit Sub
+        End If
 
-        'Check if the Feed and Product streams are completely solved
-        If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate Then
+        ' Step 7 - Final Balance, checks and EDF visualization
+        ' If flashes=0 means that Flash methods has gone alright and we update Streams conditions
+        If flashPerm = 0 And flashNoPerm = 0 Then
+            For i = 0 To UBound(StreamList)
+                StreamList(i).CalculateAsFluid(fluidList(i), FlashType_enum.ftTPFlash)
+            Next i
+            ' Now use the .Balance method of the container object to make Hysys perform a Balance
+            ' The 1 parameter means that the first entry in the array is a feed stream and the rest 
+            ' are products. Do a total balance so that if temps are specified then we'll do a heat
+            ' balance too
+            myContainer.Balance(BalanceType_enum.btTotalBalance, 1, StreamList)
+            ' Composition and Condition functions are for visualizing in the EDF
+            ' TODO: Comp = Composition(fluidList) *********
+            ' TODO: cond = Condition(fluidList) ************
+        Else
+            MsgBox("EXECUTE ERROR: Flash failed")
+            Exit Sub
+        End If
+
+        ' Step 8 - If we are here it means we solved the unit properly
+        ' Check if the Feed and Product streams are completely solved
+        If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate And
+           edfRetentate.DuplicateFluid.IsUpToDate Then
             myContainer.SolveComplete()
         End If
         Exit Sub
 ErrorTrap:
-        MsgBox("Execute Error")
+        ' TODO: you should remove this msgbox since some Execute runs always throw an error
+        MsgBox(Err.GetException().ToString)
     End Sub
 
 
@@ -294,12 +317,12 @@ ErrorTrap:
         'edfPressure = Nothing
         'edfMolFlow = Nothing
         'edfMassFlow = Nothing
-        'edfPressDrop = Nothing
-        'edfPermPressDrop = Nothing
+        edfPressDrop = Nothing
+        edfPermPressDrop = Nothing
         'edfLengthPos = Nothing
         'edfCompT = Nothing
         'edfCompH = Nothing
-        'edfNpoints = Nothing
+        edfNpoints = Nothing
         myPlotH = Nothing
         myPlotNameH = Nothing
         myPlotT = Nothing
@@ -347,7 +370,7 @@ ErrorTrap:
                 Aperm = edfAperm.Value
             Case "Diam"
                 edfDiam = myContainer.FindVariable("Diam").Variable
-                Din = edfDiam.GetValue
+                Din = edfDiam.GetValue()
                 ' Recalculation of cross-area and total volume
                 Area = Math.PI * (Din ^ 2) / 4
                 Volume = edfLen.Value * edfNtubes.Value * Area
@@ -357,7 +380,7 @@ ErrorTrap:
                 Aperm = edfAperm.Value
             Case "Thickness"
                 edfThick = myContainer.FindVariable("Thickness").Variable
-                thick = edfThick.Value
+                thick = edfThick.GetValue()
                 ' Recalculation of total permeation surface
                 Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
                 edfAperm.SetValue(L * (2 * Math.PI * Ravg))
@@ -368,7 +391,7 @@ ErrorTrap:
                 ' Recalculation of total permeation surface
                 Ravg = ((Din + (Din + 2 * thick)) / 2) / 2      ' auxiliar average radius between Dint and Dext
                 L = Aperm / (2 * Math.PI * Ravg)                     ' total length of tubes
-                edfLen.SetValue(L / edfNtubes.GetValue)
+                edfLen.SetValue(L / edfNtubes.GetValue())
                 ' Recalculation of cross-area and total volume
                 Area = Math.PI * (Din ^ 2) / 4
                 Volume = L * Area
@@ -389,9 +412,9 @@ ErrorTrap:
             Case "n"
                 'edfn = myContainer.FindVariable("n").Variable
             Case "PressDrop"
-                'edfPressDrop = myContainer.FindVariable("PressDrop").Variable
+                edfPressDrop = myContainer.FindVariable("PressDrop").Variable
             Case "PermPressDrop"
-                'edfPermPressDrop = myContainer.FindVariable("PermPressDrop").Variable
+                edfPermPressDrop = myContainer.FindVariable("PermPressDrop").Variable
             Case "k"
                 edfk = myContainer.FindVariable("k").Variable
             Case "NumberOfPoints"
@@ -453,12 +476,12 @@ ErrorTrap:
             'edfPressure = .FindVariable("StreamPress").Variable
             'edfMolFlow = .FindVariable("StreamMolFlow").Variable
             'edfMassFlow = .FindVariable("StreamMassFlow").Variable
-            'edfPressDrop = .FindVariable("PressDrop").Variable
-            'edfPermPressDrop = .FindVariable("PermPressDrop").Variable
+            edfPressDrop = .FindVariable("PressDrop").Variable
+            edfPermPressDrop = .FindVariable("PermPressDrop").Variable
             'edfLengthPos = .FindVariable("LengthPos").Variable
             'edfCompT = .FindVariable("CompT").Variable
             'edfCompH = .FindVariable("CompH").Variable
-            'edfNpoints = .FindVariable("NumberOfPoints").Variable
+            edfNpoints = .FindVariable("NumberOfPoints").Variable
             myPlotNameH = .FindVariable("PlotNameH").Variable
             myPlotNameT = .FindVariable("PlotNameT").Variable
             'edfDiamExt = .FindVariable("DiamExtern").Variable
@@ -469,8 +492,175 @@ ErrorTrap:
 
 
     '***************************************************************************'
+    '                            Main Functions                                 '
+    '***************************************************************************'
+    'Private Function Permeation()
+    '    ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
+    '    '   Fin(nComp):         vector      inlet molar flow (per component)
+    '    '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
+    '    '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
+    '    '   Fcell(nComp):       vector      similar to "Fin" but for each cell calculated from previous cell
+    '    '   FpermCells(Npoints) vector      collect total permeation in each cell for plotting purposes
+    '    Dim Fperm() As Double, FpermTotal() As Double, Fin() As Double, Fcell() As Double
+    '    Dim Qin As Double, Tin As Double, Tin_K As Double, DH As Double, DT As Double
+    '    Dim dx As Double, Ravg As Double, ApermCell As Double
+    '    Dim i As Long, nCell As Long
+    '    ReDim Fin(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
+
+    '    ' First check to see if feed flow is unsuitable
+    '    If edfInlet.MolarFlow.Value <= 0 Then
+    '        ' Return the same product values as feed values
+    '        '''''''RetExtProdMoleFracs = ExtFeedMoleFracs
+    '        '''''''RetProdTotalMoleFlow = FeedTotalMoleFlow
+    '        ''''''' TODO: Do stuff here
+    '        Exit Function
+    '    End If
+
+    '    ' Get EDF parameters into double VB variables
+    '    nCell = edfNpoints.GetValue()
+    '    ReDim FpermCells(nCell - 1)
+    '    Tin = edfInlet.Temperature.GetValue("C")
+    '    Tin_K = edfInlet.Temperature.GetValue("K")
+    '    Qin = edfInlet.ActualVolumeFlowValue
+    '    ' Difusivity Calculation
+    '    '    ' (Austenitic Steel 316L)
+    '    '    DT = 0.00000059 * Exp(-51.9 * 1000 / (R * Tin_K))
+    '    '    DH = DT * (3 ^ (1 / 2))
+    '    ' AgPd Diffusivity on hydrogen (Serra et al., 1998)
+    '    DH = 0.000000307 * Math.Exp(-25902 / (R * Tin_K))
+    '    DT = DH / Math.Sqrt(3)        ' Mass isotopic teorical classical relationship
+    '    ' Set calculated values in edf for user's visualization
+    '    edfDT.SetValue(DT)
+    '    edfDH.SetValue(DH)
+    '    ' Geometric calculations
+    '    ApermCell = Aperm / nCell                  ' permeation surface per differential cell
+    '    ' Initialize
+    '    Fin = fluidList(0).MolarFlowsValue              ' molar flow per component
+    '    Fcell = Fin
+    '    'FpermTotal = 0 ' initialy zero with no need to initialize it as long as it was local
+
+    '    ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
+    '    Dim P As Double, pFeed As Double, pperm As Double
+    '    P = 0.00000005
+    '    pFeed = edfInlet.Pressure.GetValue("kPa")
+    '    pperm = edfInlet.Pressure.GetValue("kPa")
+
+    '    'FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
+
+    '    ' LOOP over cells
+    '    'For i = 0 To nCell - 1
+    '    '    ' Calculate concentrations [kgmole/m3]
+    '    '    CHTsi = Fcell(idxHT) / Qin
+    '    '    CHsi = Fcell(idxH2) / Qin
+    '    '    CTsi = Fcell(idxT2) / Qin
+    '    '    CTso = 0
+    '    '    CHso = 0
+    '    '    CHTso = 0
+    '    '    If CTi = -32767 Then CTi = 0
+    '    '    If CTo = -32767 Then CTo = 0
+    '    '    If CHTi = -32767 Then CHTi = 0
+    '    '    If CHTo = -32767 Then CHTo = 0
+    '    '    If CHi = -32767 Then CHi = 0
+    '    '    If CHo = -32767 Then CHo = 0
+    '    '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s·m2] -> multiply by "ApermCell" -> [kmol/s]
+    '    '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
+    '    '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
+    '    '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
+    '    '    ' Molar flow component vector in next cell
+    '    '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
+    '    '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
+    '    '    FpermCells(i) = sumVectorElements(Fperm)
+    '    'Next i
+
+    '    ' Check if permeate results bigger than inlet flow
+    '    Permeation = FpermTotal
+    'End Function
+
+
+
+    '***************************************************************************'
     '                         Auxiliary Functions                               '
     '***************************************************************************'
+    Private Sub IniCompIndex()
+        ' Loop for setting index for components that can permeate (based on Inlet's basis manager)
+        Dim ComponentList As Components
+        Dim i As Long, nComp As Long
+        If edfInlet Is Nothing Then
+            ComponentList = myContainer.Flowsheet.FluidPackage.Components
+        Else
+            ComponentList = edfInlet.DuplicateFluid.Components
+        End If
+        nComp = ComponentList.Count         ' Number of Components
+        For i = 0 To nComp - 1
+            Select Case ComponentList.Item(i).Name
+                Case "Hydrogen"
+                    idxH2 = i
+                Case "Hydrogen*"
+                    idxH2 = i
+                Case "HD*"
+                    idxHD = i
+                Case "HT*"
+                    idxHT = i
+                Case "Deuterium*"
+                    idxD2 = i
+                Case "DT*"
+                    idxDT = i
+                Case "Tritium*"
+                    idxT2 = i
+            End Select
+        Next i
+    End Sub
+    Private Function SetProductFluids(fluids As Fluid(), permT As Double,
+                                      permH As Double) As Fluid()
+        ' Updates vector of fluids with new permeated composition
+        Dim compNames() As String
+        Dim permflow() As Double, retflow() As Double
+        Dim retH As Double, retT As Double
+        Dim i As Long, nComp As Long
+        ' Get current component list and number of components
+        compNames = fluids(0).Components.Names
+        nComp = UBound(compNames) + 1
+        ReDim permflow(nComp - 1), retflow(nComp - 1)
+        ' Calculate retentate flow
+        retT = fluidList(0).MolarFlowsValue(idxT2) - permT
+        retH = fluidList(0).MolarFlowsValue(idxH2) - permH
+        If retT < 0 Then retT = 0
+        If retH < 0 Then retH = 0
+        ' Loop over all components setting the proper molar flow
+        For i = 0 To nComp - 1
+            If compNames(i) = "Tritium*" Then
+                permflow(i) = permT
+                retflow(i) = retT
+            ElseIf (compNames(i) = "Hydrogen" Or compNames(i) = "Hydrogen*") Then
+                permflow(i) = permH
+                retflow(i) = retH
+            Else
+                ' Any non-permeating component
+                permflow(i) = 0
+                retflow(i) = fluids(0).MolarFlowsValue()(i) ' Necessary () for not error in property
+            End If
+        Next i
+        ' Check if streams are null flow (solver will not continue). Used in StatusQuery
+        flagPerm = True
+        flagRet = True
+        For i = 0 To nComp - 1
+            If permflow(i) <> 0 Then flagPerm = False
+            If retflow(i) <> 0 Then flagRet = False
+        Next i
+        ' Set the fictitious molar flow vectors to the actual ones
+        fluids(1).MolarFlows.SetValues(retflow, MOLFLOW_UNITS)       ' Retentate
+        fluids(2).MolarFlows.SetValues(permflow, MOLFLOW_UNITS)      ' Permeate
+        ' Set total molar flow to each fluid
+        Dim totalRetMolarFLow As Double = 0
+        Dim totalPermMolarFlow As Double = 0
+        For i = 0 To nComp - 1
+            totalRetMolarFLow += retflow(i)
+            totalPermMolarFlow += permflow(i)
+        Next
+        fluids(1).MolarFlow.SetValue(totalRetMolarFLow, MOLFLOW_UNITS)       ' Retentate
+        fluids(2).MolarFlow.SetValue(totalPermMolarFlow, MOLFLOW_UNITS)      ' Permeate
+        SetProductFluids = fluids
+    End Function
     Private Function LengthVector(L, n) As Double()
         ' Builds a vector of equidistant elements representing the position [m] of each cell
         Dim i As Long
