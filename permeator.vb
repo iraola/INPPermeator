@@ -62,7 +62,7 @@ Imports HYSYS
     Dim fluidList() As Fluid
     Dim StreamList() As ProcessStream
     ' Constants
-    Private Const R As Double = 8.314472  ' [kJ/kmol·K]
+    Private Const R As Double = 8.314472  ' [kJ/kmolï¿½K]
     Private Const MOLFLOW_UNITS As String = "kgmole/s"
 
     '***************************************************************************'
@@ -160,10 +160,12 @@ ErrorTrap:
         'aux = Permeation() ' kmol/s
         'PermeationT = aux(idxT2)
         'PermeationH = aux(idxH2)
+        Dim permMolarFlows As Double()  ' HARD-CODED TEST
+        ReDim permMolarFlows(17 - 1)
+        permMolarFlows(idxH2) = 0.00000139
 
         ' Step 5 - Set the calculated values to the list of fluids and product streams
-        'fluidList = setProductFluids(fluidList, PermeationT, PermeationH)
-        fluidList = SetProductFluids(fluidList, 0.000001, 0)
+        fluidList = SetPermeationFluids(fluidList, permMolarFlows)
         edfRetentate.ComponentMolarFlow.Calculate(fluidList(1).MolarFlowsValue(), MOLFLOW_UNITS)
         edfPermeate.ComponentMolarFlow.Calculate(fluidList(2).MolarFlowsValue(), MOLFLOW_UNITS)
         edfRetentate.MolarFlow.Calculate(fluidList(1).MolarFlowValue(), MOLFLOW_UNITS)
@@ -562,7 +564,7 @@ ErrorTrap:
     '    '    If CHTo = -32767 Then CHTo = 0
     '    '    If CHi = -32767 Then CHi = 0
     '    '    If CHo = -32767 Then CHo = 0
-    '    '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s·m2] -> multiply by "ApermCell" -> [kmol/s]
+    '    '    ' Permeation calculation [at/s]. Richardson's law: [kmol/sï¿½m2] -> multiply by "ApermCell" -> [kmol/s]
     '    '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
     '    '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
     '    '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
@@ -610,56 +612,32 @@ ErrorTrap:
             End Select
         Next i
     End Sub
-    Private Function SetProductFluids(fluids As Fluid(), permT As Double,
-                                      permH As Double) As Fluid()
-        ' Updates vector of fluids with new permeated composition
-        Dim compNames() As String
-        Dim permflow() As Double, retflow() As Double
-        Dim retH As Double, retT As Double
+    Private Function SetPermeationFluids(fluids As Fluid(), permMolarFlows As Double()) As Fluid()
+        ' Updates vector of fluids (vector of 3 or 4 Fluids) and,
+        ' specifically the products: Retentate (index 1) and Permeate
+        ' (index 2), with the new permeated composition.
+        '
+        ' To do this, updates component molar flows AND total molar flow.
+        '
+        Dim inletMolarFlows() As Double, retMolarFlows() As Double
         Dim i As Long, nComp As Long
-        ' Get current component list and number of components
-        compNames = fluids(0).Components.Names
-        nComp = UBound(compNames) + 1
-        ReDim permflow(nComp - 1), retflow(nComp - 1)
-        ' Calculate retentate flow
-        retT = fluidList(0).MolarFlowsValue(idxT2) - permT
-        retH = fluidList(0).MolarFlowsValue(idxH2) - permH
-        If retT < 0 Then retT = 0
-        If retH < 0 Then retH = 0
-        ' Loop over all components setting the proper molar flow
-        For i = 0 To nComp - 1
-            If compNames(i) = "Tritium*" Then
-                permflow(i) = permT
-                retflow(i) = retT
-            ElseIf (compNames(i) = "Hydrogen" Or compNames(i) = "Hydrogen*") Then
-                permflow(i) = permH
-                retflow(i) = retH
-            Else
-                ' Any non-permeating component
-                permflow(i) = 0
-                retflow(i) = fluids(0).MolarFlowsValue()(i) ' Necessary () for not error in property
-            End If
-        Next i
-        ' Check if streams are null flow (solver will not continue). Used in StatusQuery
-        flagPerm = True
-        flagRet = True
-        For i = 0 To nComp - 1
-            If permflow(i) <> 0 Then flagPerm = False
-            If retflow(i) <> 0 Then flagRet = False
-        Next i
+        nComp = UBound(permMolarFlows) + 1
+        ' Calculate retentate component flows
+        inletMolarFlows = fluidList(0).MolarFlowsValue
+        retMolarFlows = SubtractVectorsIf(inletMolarFlows, permMolarFlows)
         ' Set the fictitious molar flow vectors to the actual ones
-        fluids(1).MolarFlows.SetValues(retflow, MOLFLOW_UNITS)       ' Retentate
-        fluids(2).MolarFlows.SetValues(permflow, MOLFLOW_UNITS)      ' Permeate
+        fluids(1).MolarFlows.SetValues(retMolarFlows, MOLFLOW_UNITS)       ' Retentate
+        fluids(2).MolarFlows.SetValues(permMolarFlows, MOLFLOW_UNITS)      ' Permeate
         ' Set total molar flow to each fluid
         Dim totalRetMolarFLow As Double = 0
         Dim totalPermMolarFlow As Double = 0
         For i = 0 To nComp - 1
-            totalRetMolarFLow += retflow(i)
-            totalPermMolarFlow += permflow(i)
+            totalRetMolarFLow += retMolarFlows(i)
+            totalPermMolarFlow += permMolarFlows(i)
         Next
         fluids(1).MolarFlow.SetValue(totalRetMolarFLow, MOLFLOW_UNITS)       ' Retentate
         fluids(2).MolarFlow.SetValue(totalPermMolarFlow, MOLFLOW_UNITS)      ' Permeate
-        SetProductFluids = fluids
+        SetPermeationFluids = fluids
     End Function
     Private Function LengthVector(L, n) As Double()
         ' Builds a vector of equidistant elements representing the position [m] of each cell
@@ -672,6 +650,40 @@ ErrorTrap:
             lenvec(i) = lenvec(i - 1) + dx
         Next i
         LengthVector = lenvec
+    End Function
+    Private Function SubtractVectorsIf(ByRef A1, ByRef A2) As Double()
+        ' Subtract 1D arrays avoiding negative outputs.
+        '
+        ' e.g.  we want to calculate the operation Fret = Finlet - Fperm
+        '       in a per-component basis.
+        '       Thus, A1 = Finlet, A2 = Fperm
+        '       If Finlet = (4) and Fperm = (10); Fret = (-6)
+        '       But avoiding negative numbers, the result we should get
+        '       is Fperm = (4) and Fret = (0)
+        '
+        ' To do this, we use ByRef arguments and modify A2 (here Fperm)
+        ' if necessary.
+        Dim n As Long, i As Long
+        Dim A() As Double
+        ' Get sizes
+        n = UBound(A1, 1) + 1
+        ReDim A(n - 1)
+        ' Check condition that allow sum/subtract
+        If (UBound(A2, 1) + 1) <> n Then
+            MsgBox("Sizes do not match in array sum function.")
+            Exit Function
+        End If
+        ' Do calculation
+        For i = 0 To n - 1
+            If A1(i) >= A2(i) Then
+                A(i) = A1(i) - A2(i)
+            Else
+                ' Molecule i permeated till its limits
+                A(i) = 0  ' no flow in retentate
+                A2(i) = A1(i)  ' adjust permeate flow to the exact input
+            End If
+        Next i
+        SubtractVectorsIf = A
     End Function
     Function LinearInterpolation(ByRef xDataRFV As InternalRealFlexVariable, ByRef yDataRFV As InternalRealFlexVariable, ByRef xPoint As RealVariable) As Double
         'This method linear interpolates to find the y point that coresponds to the known
