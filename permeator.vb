@@ -474,17 +474,27 @@ ErrorTrap:
     '***************************************************************************'
     Private Function Permeation()
         ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
-        '   Fin(nComp):         vector      inlet molar flow (per component)
+        '   Ffeed(nComp):         vector      inlet molar flow (per component)
         '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
         '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
-        '   Fcell(nComp):       vector      similar to "Fin" but for each cell calculated from previous cell
-        '   FpermCells(Npoints) vector      collect total permeation in each cell for plotting purposes
-        Dim Fperm() As Double, FpermTotal() As Double, Fin() As Double, Fcell() As Double
-        Dim Qin As Double, Tin As Double, Tin_K As Double, Pin As Double, PinPerm As Double
+        '   Fcell(nComp):       vector      similar to "Ffeed" but for each cell calculated from previous cell
+        '   FpermCells(Npoints):vector      collect total permeation in each cell for plotting purposes
+        '
+        '   FpermAtom
+        '   FfeedPerm
+        '   PfeedAtom
+        '   PfeedPermAtom
+        '   X
+
+        Dim Fperm() As Double, FpermTotal() As Double, Ffeed() As Double, Fcell() As Double
+        Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
+        Dim Qfeed As Double, Tfeed As Double, Tfeed_K As Double, Pfeed As Double
+        Dim PfeedPerm As Double, molFrac As Double
         'Dim dx As Double, Ravg As Double, ApermCell As Double
-        Dim i As Long, iPerm As Long, nComp As Long, nCell As Long
+        Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
-        ReDim Fin(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
+        ReDim Ffeed(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
+        ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPerm - 1)
 
         ' First check to see if feed flow is unsuitable
         If edfInlet.MolarFlow.Value <= 0 Then
@@ -500,19 +510,22 @@ ErrorTrap:
         ' ReDim FpermCells(nCell - 1)
 
         ' Get inlet stream parameters
-        Pin = edfInlet.Pressure.GetValue("kPa")  ' TODO: check units of permeability to match this pressure's
-        Tin = edfInlet.Temperature.GetValue("C")
-        Tin_K = edfInlet.Temperature.GetValue("K")
-        Qin = edfInlet.ActualVolumeFlowValue
-        Fin = fluidList(0).MolarFlowsValue              ' molar flow per component
+        Pfeed = edfInlet.Pressure.GetValue("kPa")  ' TODO: check units of permeability to match this pressure's
+        Tfeed = edfInlet.Temperature.GetValue("C")
+        Tfeed_K = edfInlet.Temperature.GetValue("K")
+        Qfeed = edfInlet.ActualVolumeFlowValue
+        Ffeed = edfInlet.ComponentMolarFlowValue              ' molar flow per component
 
         '' Geometric calculations
         'ApermCell = Aperm / nCell                  ' permeation surface per differential cell
-        'Fcell = Fin
+        'Fcell = Ffeed
 
         ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
-        Dim P As Double
-        P = 0.00000005
+        Dim P() As Double
+        P = {0.00000000002, 0.00000000002, 0.00000000002} ' UNITS SHOULD BE: KMOL · m-1 · s -1 · Pa-0.5
+        ' (instead of mol · m-1 · s -1 · Pa-0.5)
+        ' TODO: MULTIPLY P TO AUTOMATICALLY GET FLOWS OF kmol/s (HYSYS default units)
+
         ' TODO: Set calculated PERMEABILITY values in edf for user's visualization
         ' edfDT.SetValue(DT)
         ' edfDH.SetValue(DH)
@@ -522,16 +535,26 @@ ErrorTrap:
 
 
         ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
-        PinPerm = 0
+        PfeedPerm = 0  ' p1 in thesis
         For i = 0 To nPerm - 1
             iPerm = permIndices(i)
-            PinPerm += Pin * edfInlet.ComponentMolarFractionValue(iPerm)
+            PfeedPerm += Pfeed * edfInlet.ComponentMolarFractionValue(iPerm)
         Next
 
         ' Loop to calculate permeated flow per atomic species
-        'For i = 0 To nPermAtom - 1
-        '    FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
-        'Next
+        For i = 0 To nPermAtom - 1
+            ' Loop through nPerm (should be 6) to get contribution to partial pressure of atom "i"
+            PfeedPermAtom(i) = 0
+            For j = 0 To nPerm - 1
+                molFrac = edfInlet.ComponentMolarFractionValue(permIndices(j))
+                ' permCoeffs is 1 or 0.5 depending on molecule being homonuclear or heteronuclear
+                PfeedPermAtom(i) += permCoeffs(i, j) * Pfeed * molFrac
+            Next
+            X(i) = PfeedPermAtom(i) / PfeedPerm
+            ' PERMEATION FORMULA: F = P(i) * A / t * (X(i) * sqrt(p_in) - Y(i) * sqrt(p_out))
+            ' Assume negligible output pressure (TODO)
+            FpermAtom(i) = P(i) * Aperm / thick * (X(i) * Math.Sqrt(PfeedPerm))
+        Next
 
 
 
@@ -540,9 +563,9 @@ ErrorTrap:
         ' LOOP over cells
         'For i = 0 To nCell - 1
         '    ' Calculate concentrations [kgmole/m3]
-        '    CHTsi = Fcell(idxHT) / Qin
-        '    CHsi = Fcell(idxH2) / Qin
-        '    CTsi = Fcell(idxT2) / Qin
+        '    CHTsi = Fcell(idxHT) / Qfeed
+        '    CHsi = Fcell(idxH2) / Qfeed
+        '    CTsi = Fcell(idxT2) / Qfeed
         '    CTso = 0
         '    CHso = 0
         '    CHTso = 0
