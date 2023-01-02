@@ -170,28 +170,32 @@ ErrorTrap:
         edfPermeate.ComponentMolarFlow.Calculate(fluidList(2).MolarFlowsValue(), MOLFLOW_UNITS)
         edfRetentate.MolarFlow.Calculate(fluidList(1).MolarFlowValue(), MOLFLOW_UNITS)
         edfPermeate.MolarFlow.Calculate(fluidList(2).MolarFlowValue(), MOLFLOW_UNITS)
-        ' SET HERE ALSO MOLAR FLOW
 
         ' Step 6 - Pressure Drop and Flash Calculation
         ' TODO: Do we need flash?? (aspentech's membrane extension does not use it)
         ' Non-permeated flow (1)
         Tin = edfInlet.Temperature.GetValue()
         If edfPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
-            flashNoPerm = fluidList(1).TPFlash(Tin, fluidList(0).PressureValue - edfPressDrop.Value)
+            flashNoPerm = fluidList(1).PHFlash(fluidList(0).PressureValue - edfPressDrop.Value,
+                                               fluidList(0).MolarEnthalpyValue)
             edfRetentate.Pressure.Calculate(fluidList(1).PressureValue)
         ElseIf fluidList(0).Pressure.IsKnown And fluidList(1).Pressure.IsKnown Then
-            flashNoPerm = fluidList(1).TPFlash(Tin, fluidList(1).PressureValue)
+            flashNoPerm = fluidList(1).PHFlash(fluidList(1).PressureValue,
+                                               fluidList(0).MolarEnthalpyValue)
             edfPressDrop.Calculate(fluidList(0).PressureValue - fluidList(1).PressureValue)
         Else
             Exit Sub
         End If
         ' Permeated flow (2)
-        If edfPermPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
+        If fluidList(0).Pressure.IsKnown And fluidList(2).Pressure.IsKnown Then
+            ' Cannot do PH flash in both outputs apparently, need to do one TP and one PH
+            ' Allow flash only by setting inlet and perm pressure
+            ' (do not use edfPermPressDrop to calculate)
+            flashPerm = fluidList(2).TPFlash(Tin, fluidList(2).PressureValue)
+            edfPermPressDrop.Calculate(fluidList(0).PressureValue - fluidList(2).PressureValue)
+        ElseIf edfPermPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
             flashPerm = fluidList(2).TPFlash(Tin, fluidList(0).PressureValue - edfPermPressDrop.Value)
             edfPermeate.Pressure.Calculate(fluidList(2).PressureValue)
-        ElseIf fluidList(0).Pressure.IsKnown And fluidList(2).Pressure.IsKnown Then
-            flashPerm = fluidList(2).flash.TPFlash(Tin, fluidList(2).PressureValue)
-            edfPermPressDrop.Calculate(fluidList(0).PressureValue - fluidList(2).PressureValue)
         Else
             Exit Sub
         End If
@@ -217,10 +221,10 @@ ErrorTrap:
 
         ' Step 8 - If we are here it means we solved the unit properly
         ' Check if the Feed and Product streams are completely solved
-        If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate And
-           edfRetentate.DuplicateFluid.IsUpToDate Then
-            myContainer.SolveComplete()
-        End If
+        'If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate
+        'And edfRetentate.DuplicateFluid.IsUpToDate Then
+        myContainer.SolveComplete()
+        'End If
         Exit Sub
 ErrorTrap:
         ' TODO: you should remove this msgbox since some Execute runs always throw an error
