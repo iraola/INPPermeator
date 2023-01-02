@@ -165,14 +165,10 @@ ErrorTrap:
         Next i
 
         ' Step 4 - Calculate Permeation
-        'Dim aux() As Double
-        'ReDim aux(nComp - 1)
-        'aux = Permeation() ' kmol/s
-        'PermeationT = aux(idxT2)
-        'PermeationH = aux(idxH2)
-        Dim permMolarFlows As Double()  ' HARD-CODED TEST
-        ReDim permMolarFlows(17 - 1)
-        permMolarFlows(idxH2) = 0.00000139
+        nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
+        Dim permMolarFlows() As Double
+        ReDim permMolarFlows(nComp - 1)
+        permMolarFlows = Permeation() ' kmol/s
 
         ' Step 5 - Set the calculated values to the list of fluids and product streams
         SetPermeationFlows(StreamList, permMolarFlows)
@@ -484,9 +480,9 @@ ErrorTrap:
         '   Fcell(nComp):       vector      similar to "Fin" but for each cell calculated from previous cell
         '   FpermCells(Npoints) vector      collect total permeation in each cell for plotting purposes
         Dim Fperm() As Double, FpermTotal() As Double, Fin() As Double, Fcell() As Double
-        Dim Qin As Double, Tin As Double, Tin_K As Double, DH As Double, DT As Double
-        Dim dx As Double, Ravg As Double, ApermCell As Double
-        Dim i As Long, nCell As Long, nComp As Long
+        Dim Qin As Double, Tin As Double, Tin_K As Double, Pin As Double, PinPerm As Double
+        'Dim dx As Double, Ravg As Double, ApermCell As Double
+        Dim i As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
         ReDim Fin(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
 
@@ -500,35 +496,46 @@ ErrorTrap:
         End If
 
         ' Get EDF parameters into double VB variables
-        nCell = edfNpoints.GetValue()
-        ReDim FpermCells(nCell - 1)
+        ' nCell = edfNpoints.GetValue()
+        ' ReDim FpermCells(nCell - 1)
+
+        ' Get inlet stream parameters
+        Pin = edfInlet.Pressure.GetValue("kPa")  ' TODO: check units of permeability to match this pressure's
         Tin = edfInlet.Temperature.GetValue("C")
         Tin_K = edfInlet.Temperature.GetValue("K")
         Qin = edfInlet.ActualVolumeFlowValue
-        ' Difusivity Calculation
-        '    ' (Austenitic Steel 316L)
-        '    DT = 0.00000059 * Exp(-51.9 * 1000 / (R * Tin_K))
-        '    DH = DT * (3 ^ (1 / 2))
-        ' AgPd Diffusivity on hydrogen (Serra et al., 1998)
-        DH = 0.000000307 * Math.Exp(-25902 / (R * Tin_K))
-        DT = DH / Math.Sqrt(3)        ' Mass isotopic teorical classical relationship
-        ' Set calculated values in edf for user's visualization
-        edfDT.SetValue(DT)
-        edfDH.SetValue(DH)
-        ' Geometric calculations
-        ApermCell = Aperm / nCell                  ' permeation surface per differential cell
-        ' Initialize
         Fin = fluidList(0).MolarFlowsValue              ' molar flow per component
-        Fcell = Fin
-        'FpermTotal = 0 ' initialy zero with no need to initialize it as long as it was local
+
+        '' Geometric calculations
+        'ApermCell = Aperm / nCell                  ' permeation surface per differential cell
+        'Fcell = Fin
 
         ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
-        Dim P As Double, pFeed As Double, pperm As Double
+        Dim P As Double
         P = 0.00000005
-        pFeed = edfInlet.Pressure.GetValue("kPa")
-        pperm = edfInlet.Pressure.GetValue("kPa")
+        ' TODO: Set calculated PERMEABILITY values in edf for user's visualization
+        ' edfDT.SetValue(DT)
+        ' edfDH.SetValue(DH)
 
-        'FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
+
+
+
+
+        ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
+        PinPerm = 0
+        For i = 0 To nPerm - 1
+            iPerm = permIndices(i)
+            PinPerm += Pin * edfInlet.ComponentMolarFractionValue(iPerm)
+        Next
+
+        ' Loop to calculate permeated flow per atomic species
+        'For i = 0 To nPermAtom - 1
+        '    FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
+        'Next
+
+
+
+
 
         ' LOOP over cells
         'For i = 0 To nCell - 1
@@ -555,7 +562,7 @@ ErrorTrap:
         '    FpermCells(i) = sumVectorElements(Fperm)
         'Next i
 
-        ' Check if permeate results bigger than inlet flow
+        ' TODO: Check if permeate results bigger than inlet flow
         Permeation = FpermTotal
     End Function
 
