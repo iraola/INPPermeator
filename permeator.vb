@@ -125,7 +125,7 @@ ErrorTrap:
         ' execute gets hit twice, once on a forgetting pass and then on _
         'a calculate pass
         Dim flashPerm As Double, flashNoPerm As Double
-        Dim Tin As Double
+        Dim Tin As Double, retPressure As Double, permPressDrop As Double
         Dim i As Long, nComp As Long
         On Error GoTo ErrorTrap
 
@@ -171,60 +171,30 @@ ErrorTrap:
         edfRetentate.MolarFlow.Calculate(fluidList(1).MolarFlowValue(), MOLFLOW_UNITS)
         edfPermeate.MolarFlow.Calculate(fluidList(2).MolarFlowValue(), MOLFLOW_UNITS)
 
-        ' Step 6 - Pressure Drop and Flash Calculation
-        ' TODO: Do we need flash?? (aspentech's membrane extension does not use it)
-        ' Non-permeated flow (1)
-        Tin = edfInlet.Temperature.GetValue()
-        If edfPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
-            flashNoPerm = fluidList(1).PHFlash(fluidList(0).PressureValue - edfPressDrop.Value,
-                                               fluidList(0).MolarEnthalpyValue)
-            edfRetentate.Pressure.Calculate(fluidList(1).PressureValue)
-        ElseIf fluidList(0).Pressure.IsKnown And fluidList(1).Pressure.IsKnown Then
-            flashNoPerm = fluidList(1).PHFlash(fluidList(1).PressureValue,
-                                               fluidList(0).MolarEnthalpyValue)
-            edfPressDrop.Calculate(fluidList(0).PressureValue - fluidList(1).PressureValue)
-        Else
-            Exit Sub
-        End If
-        ' Permeated flow (2)
-        If fluidList(0).Pressure.IsKnown And fluidList(2).Pressure.IsKnown Then
-            ' Cannot do PH flash in both outputs apparently, need to do one TP and one PH
-            ' Allow flash only by setting inlet and perm pressure
-            ' (do not use edfPermPressDrop to calculate)
-            flashPerm = fluidList(2).TPFlash(Tin, fluidList(2).PressureValue)
-            edfPermPressDrop.Calculate(fluidList(0).PressureValue - fluidList(2).PressureValue)
-        ElseIf edfPermPressDrop.IsKnown And fluidList(0).Pressure.IsKnown Then
-            flashPerm = fluidList(2).TPFlash(Tin, fluidList(0).PressureValue - edfPermPressDrop.Value)
-            edfPermeate.Pressure.Calculate(fluidList(2).PressureValue)
-        Else
-            Exit Sub
-        End If
+        '' Step 6 - Pressure Drop and Flash Calculation
+        Tin = edfInlet.TemperatureValue
+        retPressure = edfInlet.PressureValue - edfPressDrop.Value
+        permPressDrop = edfInlet.PressureValue - edfPermeate.PressureValue
+        edfRetentate.Temperature.Calculate(Tin)
+        edfPermeate.Temperature.Calculate(Tin)
+        edfRetentate.Pressure.Calculate(retPressure)
+        edfPermPressDrop.Calculate(permPressDrop)
 
         ' Step 7 - Final Balance, checks and EDF visualization
-        ' If flashes=0 means that Flash methods has gone alright and we update Streams conditions
-        If flashPerm = 0 And flashNoPerm = 0 Then
-            For i = 0 To UBound(StreamList)
-                StreamList(i).CalculateAsFluid(fluidList(i), FlashType_enum.ftTPFlash)
-            Next i
-            ' Now use the .Balance method of the container object to make Hysys perform a Balance
-            ' The 1 parameter means that the first entry in the array is a feed stream and the rest 
-            ' are products. Do a total balance so that if temps are specified then we'll do a heat
-            ' balance too
-            myContainer.Balance(BalanceType_enum.btTotalBalance, 1, StreamList)
-            ' Composition and Condition functions are for visualizing in the EDF
-            ' TODO: Comp = Composition(fluidList) *********
-            ' TODO: cond = Condition(fluidList) ************
-        Else
-            MsgBox("EXECUTE ERROR: Flash failed")
-            Exit Sub
-        End If
+        ' Now use the .Balance method of the container object to make Hysys perform a Balance
+        ' The 1 parameter means that the first entry in the array is a feed stream and the rest 
+        ' are products. Do a total balance so that if temps are specified then we'll do a heat
+        myContainer.Balance(BalanceType_enum.btTotalBalance, 1, StreamList)
+        ' Composition and Condition functions are for visualizing in the EDF
+        ' TODO: Note that the next fluidList is not updated at this point without flashes
+        ' TODO: Comp = Composition(fluidList) *********
+        ' TODO: cond = Condition(fluidList) ************
 
         ' Step 8 - If we are here it means we solved the unit properly
-        ' Check if the Feed and Product streams are completely solved
-        'If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate
-        'And edfRetentate.DuplicateFluid.IsUpToDate Then
-        myContainer.SolveComplete()
-        'End If
+        ' Check if the Product streams are completely solved
+        If edfPermeate.DuplicateFluid.IsUpToDate And edfRetentate.DuplicateFluid.IsUpToDate Then
+            myContainer.SolveComplete()
+        End If
         Exit Sub
 ErrorTrap:
         ' TODO: you should remove this msgbox since some Execute runs always throw an error
@@ -627,7 +597,7 @@ ErrorTrap:
         Dim i As Long, nComp As Long
         nComp = UBound(permMolarFlows) + 1
         ' Calculate retentate component flows
-        inletMolarFlows = fluidList(0).MolarFlowsValue
+        inletMolarFlows = fluids(0).MolarFlowsValue
         retMolarFlows = SubtractVectorsIf(inletMolarFlows, permMolarFlows)
         ' Set the fictitious molar flow vectors to the actual ones
         fluids(1).MolarFlows.SetValues(retMolarFlows, MOLFLOW_UNITS)       ' Retentate
