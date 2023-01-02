@@ -165,13 +165,9 @@ ErrorTrap:
         permMolarFlows(idxH2) = 0.00000139
 
         ' Step 5 - Set the calculated values to the list of fluids and product streams
-        fluidList = SetPermeationFluids(fluidList, permMolarFlows)
-        edfRetentate.ComponentMolarFlow.Calculate(fluidList(1).MolarFlowsValue(), MOLFLOW_UNITS)
-        edfPermeate.ComponentMolarFlow.Calculate(fluidList(2).MolarFlowsValue(), MOLFLOW_UNITS)
-        edfRetentate.MolarFlow.Calculate(fluidList(1).MolarFlowValue(), MOLFLOW_UNITS)
-        edfPermeate.MolarFlow.Calculate(fluidList(2).MolarFlowValue(), MOLFLOW_UNITS)
+        SetPermeationFlows(StreamList, permMolarFlows)
 
-        '' Step 6 - Pressure Drop and Flash Calculation
+        '' Step 6 - Pressure drop and flash specifications
         Tin = edfInlet.TemperatureValue
         retPressure = edfInlet.PressureValue - edfPressDrop.Value
         permPressDrop = edfInlet.PressureValue - edfPermeate.PressureValue
@@ -586,9 +582,9 @@ ErrorTrap:
             End Select
         Next i
     End Sub
-    Private Function SetPermeationFluids(fluids As Fluid(), permMolarFlows As Double()) As Fluid()
-        ' Updates vector of fluids (vector of 3 or 4 Fluids) and,
-        ' specifically the products: Retentate (index 1) and Permeate
+    Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
+        ' Updates vector of streams (vector of 3 or 4 Fluids) and,
+        ' specifically, the products: Retentate (index 1) and Permeate
         ' (index 2), with the new permeated composition.
         '
         ' To do this, updates component molar flows AND total molar flow.
@@ -597,11 +593,11 @@ ErrorTrap:
         Dim i As Long, nComp As Long
         nComp = UBound(permMolarFlows) + 1
         ' Calculate retentate component flows
-        inletMolarFlows = fluids(0).MolarFlowsValue
+        inletMolarFlows = streams(0).ComponentMolarFlowValue
         retMolarFlows = SubtractVectorsIf(inletMolarFlows, permMolarFlows)
         ' Set the fictitious molar flow vectors to the actual ones
-        fluids(1).MolarFlows.SetValues(retMolarFlows, MOLFLOW_UNITS)       ' Retentate
-        fluids(2).MolarFlows.SetValues(permMolarFlows, MOLFLOW_UNITS)      ' Permeate
+        streams(1).ComponentMolarFlow.Calculate(retMolarFlows, MOLFLOW_UNITS)  ' Retentate
+        streams(2).ComponentMolarFlow.Calculate(permMolarFlows, MOLFLOW_UNITS) ' Permeate
         ' Set total molar flow to each fluid
         Dim totalRetMolarFLow As Double = 0
         Dim totalPermMolarFlow As Double = 0
@@ -609,10 +605,9 @@ ErrorTrap:
             totalRetMolarFLow += retMolarFlows(i)
             totalPermMolarFlow += permMolarFlows(i)
         Next
-        fluids(1).MolarFlow.SetValue(totalRetMolarFLow, MOLFLOW_UNITS)       ' Retentate
-        fluids(2).MolarFlow.SetValue(totalPermMolarFlow, MOLFLOW_UNITS)      ' Permeate
-        SetPermeationFluids = fluids
-    End Function
+        streams(1).MolarFlow.Calculate(totalRetMolarFLow, MOLFLOW_UNITS)       ' Retentate
+        streams(2).MolarFlow.Calculate(totalPermMolarFlow, MOLFLOW_UNITS)      ' Permeate
+    End Sub
     Private Function LengthVector(L, n) As Double()
         ' Builds a vector of equidistant elements representing the position [m] of each cell
         Dim i As Long
