@@ -8,9 +8,19 @@ Imports HYSYS
     '***************************************************************************'
     '                             VB Variables                                  '
     '***************************************************************************'
-    ' Indices of permeated components
+    ' Indices of permeated components: in this order: H2, HD, HT, D2, DT, T2
     Private idxH2 As Long, idxHD As Long, idxHT As Long
     Private idxD2 As Long, idxDT As Long, idxT2 As Long
+    Private nPerm As Short = 6          ' number of permeating species (6 if all hydrogens)
+    Private nPermAtom As Short          ' number of permeating atoms (3 if H, D and T)
+    Private permCoeffs As Double(,) = { ' array of coefficients to compute partial pressures
+        {1, 0.5, 0.5, 0, 0, 0},         ' contribution per diatomic molecule
+        {0, 0.5, 0, 1, 0.5, 0},
+        {0, 0, 0.5, 0, 0.5, 1}
+    }
+    Private permIndices As Double()     ' array of indices to adress each diatomic species in
+    ' hysys component list
+
     ' Permeation error flags
     Private flagRet As Boolean, flagPerm As Boolean
     ' Plot
@@ -112,7 +122,7 @@ Imports HYSYS
         Volume = L * Area
         Call CreatePlot()
         ' Loop for setting index for components of interest (based on Inlet's basis manager)
-        ' ******************************************** Call iniCompIndex
+        IniCompIndex()
         ' Return Initialize
         Initialize = CurrentExtensionVersion_enum.extnCurrentVersion
         Exit Function
@@ -466,87 +476,88 @@ ErrorTrap:
     '***************************************************************************'
     '                            Main Functions                                 '
     '***************************************************************************'
-    'Private Function Permeation()
-    '    ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
-    '    '   Fin(nComp):         vector      inlet molar flow (per component)
-    '    '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
-    '    '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
-    '    '   Fcell(nComp):       vector      similar to "Fin" but for each cell calculated from previous cell
-    '    '   FpermCells(Npoints) vector      collect total permeation in each cell for plotting purposes
-    '    Dim Fperm() As Double, FpermTotal() As Double, Fin() As Double, Fcell() As Double
-    '    Dim Qin As Double, Tin As Double, Tin_K As Double, DH As Double, DT As Double
-    '    Dim dx As Double, Ravg As Double, ApermCell As Double
-    '    Dim i As Long, nCell As Long
-    '    ReDim Fin(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
+    Private Function Permeation()
+        ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
+        '   Fin(nComp):         vector      inlet molar flow (per component)
+        '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
+        '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
+        '   Fcell(nComp):       vector      similar to "Fin" but for each cell calculated from previous cell
+        '   FpermCells(Npoints) vector      collect total permeation in each cell for plotting purposes
+        Dim Fperm() As Double, FpermTotal() As Double, Fin() As Double, Fcell() As Double
+        Dim Qin As Double, Tin As Double, Tin_K As Double, DH As Double, DT As Double
+        Dim dx As Double, Ravg As Double, ApermCell As Double
+        Dim i As Long, nCell As Long, nComp As Long
+        nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
+        ReDim Fin(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
 
-    '    ' First check to see if feed flow is unsuitable
-    '    If edfInlet.MolarFlow.Value <= 0 Then
-    '        ' Return the same product values as feed values
-    '        '''''''RetExtProdMoleFracs = ExtFeedMoleFracs
-    '        '''''''RetProdTotalMoleFlow = FeedTotalMoleFlow
-    '        ''''''' TODO: Do stuff here
-    '        Exit Function
-    '    End If
+        ' First check to see if feed flow is unsuitable
+        If edfInlet.MolarFlow.Value <= 0 Then
+            ' Return the same product values as feed values
+            '''''''RetExtProdMoleFracs = ExtFeedMoleFracs
+            '''''''RetProdTotalMoleFlow = FeedTotalMoleFlow
+            ''''''' TODO: Complete stuff here: return 0 value for permeation
+            Exit Function
+        End If
 
-    '    ' Get EDF parameters into double VB variables
-    '    nCell = edfNpoints.GetValue()
-    '    ReDim FpermCells(nCell - 1)
-    '    Tin = edfInlet.Temperature.GetValue("C")
-    '    Tin_K = edfInlet.Temperature.GetValue("K")
-    '    Qin = edfInlet.ActualVolumeFlowValue
-    '    ' Difusivity Calculation
-    '    '    ' (Austenitic Steel 316L)
-    '    '    DT = 0.00000059 * Exp(-51.9 * 1000 / (R * Tin_K))
-    '    '    DH = DT * (3 ^ (1 / 2))
-    '    ' AgPd Diffusivity on hydrogen (Serra et al., 1998)
-    '    DH = 0.000000307 * Math.Exp(-25902 / (R * Tin_K))
-    '    DT = DH / Math.Sqrt(3)        ' Mass isotopic teorical classical relationship
-    '    ' Set calculated values in edf for user's visualization
-    '    edfDT.SetValue(DT)
-    '    edfDH.SetValue(DH)
-    '    ' Geometric calculations
-    '    ApermCell = Aperm / nCell                  ' permeation surface per differential cell
-    '    ' Initialize
-    '    Fin = fluidList(0).MolarFlowsValue              ' molar flow per component
-    '    Fcell = Fin
-    '    'FpermTotal = 0 ' initialy zero with no need to initialize it as long as it was local
+        ' Get EDF parameters into double VB variables
+        nCell = edfNpoints.GetValue()
+        ReDim FpermCells(nCell - 1)
+        Tin = edfInlet.Temperature.GetValue("C")
+        Tin_K = edfInlet.Temperature.GetValue("K")
+        Qin = edfInlet.ActualVolumeFlowValue
+        ' Difusivity Calculation
+        '    ' (Austenitic Steel 316L)
+        '    DT = 0.00000059 * Exp(-51.9 * 1000 / (R * Tin_K))
+        '    DH = DT * (3 ^ (1 / 2))
+        ' AgPd Diffusivity on hydrogen (Serra et al., 1998)
+        DH = 0.000000307 * Math.Exp(-25902 / (R * Tin_K))
+        DT = DH / Math.Sqrt(3)        ' Mass isotopic teorical classical relationship
+        ' Set calculated values in edf for user's visualization
+        edfDT.SetValue(DT)
+        edfDH.SetValue(DH)
+        ' Geometric calculations
+        ApermCell = Aperm / nCell                  ' permeation surface per differential cell
+        ' Initialize
+        Fin = fluidList(0).MolarFlowsValue              ' molar flow per component
+        Fcell = Fin
+        'FpermTotal = 0 ' initialy zero with no need to initialize it as long as it was local
 
-    '    ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
-    '    Dim P As Double, pFeed As Double, pperm As Double
-    '    P = 0.00000005
-    '    pFeed = edfInlet.Pressure.GetValue("kPa")
-    '    pperm = edfInlet.Pressure.GetValue("kPa")
+        ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
+        Dim P As Double, pFeed As Double, pperm As Double
+        P = 0.00000005
+        pFeed = edfInlet.Pressure.GetValue("kPa")
+        pperm = edfInlet.Pressure.GetValue("kPa")
 
-    '    'FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
+        'FpermTotal = P * Aperm / thick * (Math.Sqrt(pFeed) - Math.Sqrt(pperm))
 
-    '    ' LOOP over cells
-    '    'For i = 0 To nCell - 1
-    '    '    ' Calculate concentrations [kgmole/m3]
-    '    '    CHTsi = Fcell(idxHT) / Qin
-    '    '    CHsi = Fcell(idxH2) / Qin
-    '    '    CTsi = Fcell(idxT2) / Qin
-    '    '    CTso = 0
-    '    '    CHso = 0
-    '    '    CHTso = 0
-    '    '    If CTi = -32767 Then CTi = 0
-    '    '    If CTo = -32767 Then CTo = 0
-    '    '    If CHTi = -32767 Then CHTi = 0
-    '    '    If CHTo = -32767 Then CHTo = 0
-    '    '    If CHi = -32767 Then CHi = 0
-    '    '    If CHo = -32767 Then CHo = 0
-    '    '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s�m2] -> multiply by "ApermCell" -> [kmol/s]
-    '    '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
-    '    '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
-    '    '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
-    '    '    ' Molar flow component vector in next cell
-    '    '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
-    '    '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
-    '    '    FpermCells(i) = sumVectorElements(Fperm)
-    '    'Next i
+        ' LOOP over cells
+        'For i = 0 To nCell - 1
+        '    ' Calculate concentrations [kgmole/m3]
+        '    CHTsi = Fcell(idxHT) / Qin
+        '    CHsi = Fcell(idxH2) / Qin
+        '    CTsi = Fcell(idxT2) / Qin
+        '    CTso = 0
+        '    CHso = 0
+        '    CHTso = 0
+        '    If CTi = -32767 Then CTi = 0
+        '    If CTo = -32767 Then CTo = 0
+        '    If CHTi = -32767 Then CHTi = 0
+        '    If CHTo = -32767 Then CHTo = 0
+        '    If CHi = -32767 Then CHi = 0
+        '    If CHo = -32767 Then CHo = 0
+        '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s�m2] -> multiply by "ApermCell" -> [kmol/s]
+        '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
+        '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
+        '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
+        '    ' Molar flow component vector in next cell
+        '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
+        '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
+        '    FpermCells(i) = sumVectorElements(Fperm)
+        'Next i
 
-    '    ' Check if permeate results bigger than inlet flow
-    '    Permeation = FpermTotal
-    'End Function
+        ' Check if permeate results bigger than inlet flow
+        Permeation = FpermTotal
+    End Function
 
 
 
@@ -556,31 +567,47 @@ ErrorTrap:
     Private Sub IniCompIndex()
         ' Loop for setting index for components that can permeate (based on Inlet's basis manager)
         Dim ComponentList As Components
+        Dim isH As Short, isD As Short, isT As Short
         Dim i As Long, nComp As Long
+        ' Init the array of the indices of permeating species to -1
+        permIndices = {-1, -1, -1, -1, -1, -1}
+        ' Init component list
         If edfInlet Is Nothing Then
             ComponentList = myContainer.Flowsheet.FluidPackage.Components
         Else
             ComponentList = edfInlet.DuplicateFluid.Components
         End If
         nComp = ComponentList.Count         ' Number of Components
+        ' Loop over component list and search for hydrogen isotopes
         For i = 0 To nComp - 1
             Select Case ComponentList.Item(i).Name
                 Case "Hydrogen"
-                    idxH2 = i
+                    permIndices(0) = i
+                    isH = 1
                 Case "Hydrogen*"
-                    idxH2 = i
+                    permIndices(0) = i
+                    isH = 1
                 Case "HD*"
-                    idxHD = i
+                    permIndices(1) = i
+                    isH = 1
+                    isD = 1
                 Case "HT*"
-                    idxHT = i
+                    permIndices(2) = i
+                    isH = 1
+                    isT = 1
                 Case "Deuterium*"
-                    idxD2 = i
+                    permIndices(3) = i
+                    isD = 1
                 Case "DT*"
-                    idxDT = i
+                    permIndices(4) = i
+                    isD = 1
+                    isT = 1
                 Case "Tritium*"
-                    idxT2 = i
+                    permIndices(5) = i
+                    isT = 1
             End Select
         Next i
+        nPermAtom = isH + isD + isT ' TODO: check that we can sum booleans to get a long
     End Sub
     Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
         ' Updates vector of streams (vector of 3 or 4 Fluids) and,
