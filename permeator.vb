@@ -486,14 +486,14 @@ ErrorTrap:
         '   PfeedPermAtom
         '   X
 
-        Dim Fperm() As Double, FpermTotal() As Double, Ffeed() As Double, Fcell() As Double
+        Dim Fperm() As Double, FpermComp() As Double, Ffeed() As Double, Fcell() As Double
         Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
         Dim Qfeed As Double, Tfeed As Double, Tfeed_K As Double, Pfeed As Double
         Dim PfeedPerm As Double, molFrac As Double
         'Dim dx As Double, Ravg As Double, ApermCell As Double
         Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
-        ReDim Ffeed(nComp - 1), Fperm(nComp - 1), FpermTotal(nComp - 1), Fcell(nComp - 1)
+        ReDim Ffeed(nComp - 1), Fperm(nComp - 1), FpermComp(nComp - 1), Fcell(nComp - 1)
         ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPerm - 1)
 
         ' First check to see if feed flow is unsuitable
@@ -533,11 +533,11 @@ ErrorTrap:
 
 
 
-
+        ' LOOPS: use "i" for atoms (H, D, T) and "j" for molecules (H2, HD, HT, D2, DT, T2)
         ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
         PfeedPerm = 0  ' p1 in thesis
-        For i = 0 To nPerm - 1
-            iPerm = permIndices(i)
+        For j = 0 To nPerm - 1
+            iPerm = permIndices(j)
             PfeedPerm += Pfeed * edfInlet.ComponentMolarFractionValue(iPerm)
         Next
 
@@ -554,6 +554,16 @@ ErrorTrap:
             ' PERMEATION FORMULA: F = P(i) * A / t * (X(i) * sqrt(p_in) - Y(i) * sqrt(p_out))
             ' Assume negligible output pressure (TODO)
             FpermAtom(i) = P(i) * Aperm / thick * (X(i) * Math.Sqrt(PfeedPerm))
+        Next
+
+        ' We have H, D and T flow, now calculate H2, HD, HT, D2, DT, T2 flows
+        For j = 0 To nPerm - 1
+            iPerm = permIndices(j)
+            For i = 0 To nPermAtom - 1
+                ' Calculate contribution of each species
+                ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
+                FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
+            Next
         Next
 
 
@@ -586,7 +596,7 @@ ErrorTrap:
         'Next i
 
         ' TODO: Check if permeate results bigger than inlet flow
-        Permeation = FpermTotal
+        Permeation = FpermComp
     End Function
 
 
