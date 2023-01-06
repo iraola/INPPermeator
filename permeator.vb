@@ -12,12 +12,15 @@ Imports HYSYS
     Private idxH2 As Long, idxHD As Long, idxHT As Long
     Private idxD2 As Long, idxDT As Long, idxT2 As Long
     Private nPerm As Short = 6          ' number of permeating species (6 if all hydrogens)
+    Private nHeteroNuclear As Short = 3
     Private nPermAtom As Short          ' number of permeating atoms (3 if H, D and T)
     Private permCoeffs As Double(,) = { ' array of coefficients to compute partial pressures
         {1, 0.5, 0.5, 0, 0, 0},         ' contribution per diatomic molecule
         {0, 0.5, 0, 1, 0.5, 0},
         {0, 0, 0.5, 0, 0.5, 1}
     }
+    Private permIndicesHetero As Short(,) ' array of indices to locate heteronuclear molecules
+    ' for each atom in HYSYS, with the shape: {{-1, HD, HT}, {HD, -1, DT}, {HT, DT, -1}}
     Private permIndices As Double()     ' array of indices to adress each diatomic species in
     ' hysys component list
 
@@ -474,17 +477,22 @@ ErrorTrap:
     '***************************************************************************'
     Private Function Permeation()
         ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
-        '   Ffeed(nComp):         vector      inlet molar flow (per component)
+        '   Ffeed(nComp):       vector      inlet molar flow (per component)
         '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
         '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
         '   Fcell(nComp):       vector      similar to "Ffeed" but for each cell calculated from previous cell
         '   FpermCells(Npoints):vector      collect total permeation in each cell for plotting purposes
         '
-        '   FpermAtom
-        '   FfeedPerm
-        '   PfeedAtom
-        '   PfeedPermAtom
-        '   X
+        '   FpermAtom:          Double(3)   Output of the diffusion part of code (H, D, T mole flows)
+        '   FfeedPerm:
+        '   PfeedAtom:
+        '   PfeedPermAtom:
+        '   X:
+        '
+        '   flagLoop:           Boolean     Used to assert if H, D or T permeation finished and break loop
+        '   permIndicesSorted:  Short(3)    Sorts indices to address FpermAtom in ascending order
+        '   FpermAtomFlag:      Double(3)
+        '   permIndicesHeteroCopy: Short(3,3)
 
         Dim Fperm() As Double, FpermComp() As Double, Ffeed() As Double, Fcell() As Double
         Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
@@ -556,15 +564,105 @@ ErrorTrap:
             FpermAtom(i) = P(i) * Aperm / thick * (X(i) * Math.Sqrt(PfeedPerm))
         Next
 
+
+
+        ' TODO: PUT ALL THIS IN A SEPARATE FUNCTION, IT IS TOO MUCH
+
+        ' OPTION 1: We have all molecules in the feed and there is enough of all of them
         ' We have H, D and T flow, now calculate H2, HD, HT, D2, DT, T2 flows
-        For j = 0 To nPerm - 1
-            iPerm = permIndices(j)
-            For i = 0 To nPermAtom - 1
-                ' Calculate contribution of each species
-                ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
-                FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
+        'For j = 0 To nPerm - 1
+        '    iPerm = permIndices(j)
+        '    For i = 0 To nPermAtom - 1
+        '        ' Calculate contribution of each species
+        '        ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
+        '        FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
+        '    Next
+        'Next
+
+        ' OPTION 2: Some molecules in the feed are missing
+        ' Loop in ascending order of permeation flow rate per atom
+        Dim flagLoop As Boolean
+        Dim permIndicesSorted As Short(), iAtom As Short, k As Short, iMolec As Short
+        ' We will subtract the flows we go assigning from this array
+        Dim FpermAtomFlag As Double(), permIndicesHeteroCopy As Short(,)
+        ReDim FpermAtomFlag(nPermAtom - 1), permIndicesHeteroCopy(nPermAtom - 1, nPermAtom - 1)
+        Array.Copy(FpermAtom, FpermAtomFlag, nPermAtom)
+        Array.Copy(permIndicesHetero, permIndicesHeteroCopy, 9) ' TODO: CHECK THIS COPY WORKS WITH THE 9 ELEMENTS
+        ' Sort flows in ascending order and return the indices of the ordered list
+        permIndicesSorted = SortIndices(FpermAtom)
+
+        ' Heteronuclears loop first
+        For i = 0 To nPermAtom - 1
+            iAtom = permIndicesSorted(i)
+            flagLoop = False
+            For k = 0 To nHeteroNuclear - 1
+                ' With heteronuclears we need double the flow rate bc they contribute by half
+                iMolec = permIndicesHeteroCopy(iAtom, k)
+                ' Continue to next iteration if element is -1
+                If iMolec < 0 Then Continue For
+                ' First check if there is feed flow rate at all for "iMolec"
+                If Ffeed(iMolec) > 0 Then
+                    ' This means it has at least one atom in common with "i"
+                    If FpermAtomFlag(iAtom) >= 2 * Ffeed(iMolec) Then
+                        ' We exhaust all inlet flow of this molecule in permeation
+                        FpermComp(iMolec) += 2 * Ffeed(iMolec)
+                    Else
+                        ' Permeation of atom "i" is finished
+                        FpermComp(iMolec) += 2 * FpermAtomFlag(iAtom)
+                        flagLoop = True
+                    End If
+                    ' Subtract flow from our flag permeation array for both atoms affected
+                    ' without the x2!
+                    FpermAtomFlag(iAtom) -= FpermComp(iMolec) / 2   ' current atom
+                    FpermAtomFlag(k) -= FpermComp(iMolec) / 2       ' the other atom affected ' TODO: this could become negative!
+                    ' Remove molecule from matrix to avoid passing through it twice
+                    ' (since permIndicesHetero is upper diagonal)
+                    permIndicesHeteroCopy(iAtom, k) = -1
+                    permIndicesHeteroCopy(k, iAtom) = -1
+                    ' Exit For loop in case we finished 'iAtom' permeation
+                    If flagLoop Then
+                        Exit For
+                    End If
+                End If
             Next
         Next
+
+        ' Homonuclears loop last
+        'For i = 0 To nPermAtom - 1
+        '    iAtom = permIndicesSorted(i)
+        '    ' heteronuclears first
+        '    flagLoop = False
+        '    For k = 0 To nHeteroNuclear - 1
+        '        ' With heteronuclears we need double the flow rate bc they contribute by half
+        '        iMolec = permIndicesHeteroCopy(iAtom, k)
+        '        ' Continue to next iteration if element is -1
+        '        If iMolec < 0 Then Continue For
+        '        ' First check if there is feed flow rate at all for "iMolec"
+        '        If Ffeed(iMolec) > 0 Then
+        '            ' This means it has at least one atom in common with "i"
+        '            If FpermAtomFlag(iAtom) >= 2 * Ffeed(iMolec) Then
+        '                ' We exhaust all inlet flow of this molecule in permeation
+        '                FpermComp(iMolec) += 2 * Ffeed(iMolec)
+        '            Else
+        '                ' Permeation of atom "i" is finished
+        '                FpermComp(iMolec) += 2 * FpermAtomFlag(iAtom)
+        '                flagLoop = True
+        '            End If
+        '            ' Subtract flow from our flag permeation array for both atoms affected
+        '            ' without the x2!
+        '            FpermAtomFlag(iAtom) -= FpermComp(iMolec) / 2   ' current atom
+        '            FpermAtomFlag(k) -= FpermComp(iMolec) / 2       ' the other atom affected ' TODO: this could become negative!
+        '            ' Remove molecule from matrix to avoid passing through it twice
+        '            ' (since permIndicesHetero is upper diagonal)
+        '            permIndicesHeteroCopy(iAtom, k) = -1
+        '            permIndicesHeteroCopy(k, iAtom) = -1
+        '            ' Exit For loop in case we finished 'iAtom' permeation
+        '            If flagLoop Then
+        '                Exit For
+        '            End If
+        '        End If
+        '    Next
+        'Next
 
 
 
@@ -647,6 +745,11 @@ ErrorTrap:
                     isT = 1
             End Select
         Next i
+        permIndicesHetero = {
+            {-1, permIndices(1), permIndices(2)},
+            {permIndices(1), -1, permIndices(4)},
+            {permIndices(2), permIndices(4), -1}
+        }
         nPermAtom = isH + isD + isT ' TODO: check that we can sum booleans to get a long
     End Sub
     Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
@@ -721,77 +824,77 @@ ErrorTrap:
         Next i
         SubtractVectorsIf = A
     End Function
-    Function LinearInterpolation(ByRef xDataRFV As InternalRealFlexVariable, ByRef yDataRFV As InternalRealFlexVariable, ByRef xPoint As RealVariable) As Double
-        'This method linear interpolates to find the y point that coresponds to the known
-        'x point for the given x and y data sets.
+    '    Function LinearInterpolation(ByRef xDataRFV As InternalRealFlexVariable, ByRef yDataRFV As InternalRealFlexVariable, ByRef xPoint As RealVariable) As Double
+    '        'This method linear interpolates to find the y point that coresponds to the known
+    '        'x point for the given x and y data sets.
 
-        Dim xData As Object
-        Dim yData As Object
-        Dim x As Double
-        Dim y As Double
+    '        Dim xData As Object
+    '        Dim yData As Object
+    '        Dim x As Double
+    '        Dim y As Double
 
-        On Error GoTo ErrorTrap
+    '        On Error GoTo ErrorTrap
 
-        Dim High As Integer
-        Dim Low As Integer
-        Dim number As Integer
+    '        Dim High As Integer
+    '        Dim Low As Integer
+    '        Dim number As Integer
 
-        y = EmptyValue_enum.HEmpty
-        LinearInterpolation = y
+    '        y = EmptyValue_enum.HEmpty
+    '        LinearInterpolation = y
 
-        'UPGRADE_WARNING: Couldn't resolve default property of object xDataRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        'UPGRADE_WARNING: Couldn't resolve default property of object xData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        xData = xDataRFV.Values
-        'UPGRADE_WARNING: Couldn't resolve default property of object yDataRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        'UPGRADE_WARNING: Couldn't resolve default property of object yData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        yData = yDataRFV.Values
-        x = xPoint.Value
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object xDataRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object xData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        xData = xDataRFV.Values
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object yDataRFV.Values. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object yData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        yData = yDataRFV.Values
+    '        x = xPoint.Value
 
-        High = UBound(xData)
-        Low = LBound(xData)
-        number = High - Low + 1
+    '        High = UBound(xData)
+    '        Low = LBound(xData)
+    '        number = High - Low + 1
 
-        'There must be more than 1 data point to Linearly Interpolate
-        If number <= 1 Then Exit Function
-        'Check that the x and y Data have the same bounds
-        If High <> UBound(yData) Or Low <> LBound(yData) Then Exit Function
-        'Sort the x Data from low to high
-        Call Sort(xData, yData)
+    '        'There must be more than 1 data point to Linearly Interpolate
+    '        If number <= 1 Then Exit Function
+    '        'Check that the x and y Data have the same bounds
+    '        If High <> UBound(yData) Or Low <> LBound(yData) Then Exit Function
+    '        'Sort the x Data from low to high
+    '        Call Sort(xData, yData)
 
-        'Check to see that the x point is within the x Data Range
-        'UPGRADE_WARNING: Couldn't resolve default property of object xData(High). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        'UPGRADE_WARNING: Couldn't resolve default property of object xData(Low). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        If x < xData(Low) Or x > xData(High) Then
-            MsgBox("The point is outside the data range")
-            Exit Function
-        End If
+    '        'Check to see that the x point is within the x Data Range
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object xData(High). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object xData(Low). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        If x < xData(Low) Or x > xData(High) Then
+    '            MsgBox("The point is outside the data range")
+    '            Exit Function
+    '        End If
 
-        Dim I As Short
-        'Search the data until the x Point is between two x Data points
-        For I = Low To High
-            'UPGRADE_WARNING: Couldn't resolve default property of object xData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-            If x < xData(I) Then
-                'UPGRADE_WARNING: Couldn't resolve default property of object yData(I - 1). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object yData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object xData(I - 1). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object xData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object yData(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                y = yData(I) - ((xData(I) - x) / (xData(I) - xData(I - 1)) * (yData(I) - yData(I - 1)))
-                Exit For
-            End If
-        Next I
-        'UPGRADE_WARNING: Couldn't resolve default property of object xData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        xDataRFV.Values = xData
-        'UPGRADE_WARNING: Couldn't resolve default property of object yData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-        yDataRFV.Values = yData
-        LinearInterpolation = y
-        Exit Function
+    '        Dim I As Short
+    '        'Search the data until the x Point is between two x Data points
+    '        For I = Low To High
+    '            'UPGRADE_WARNING: Couldn't resolve default property of object xData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '            If x < xData(I) Then
+    '                'UPGRADE_WARNING: Couldn't resolve default property of object yData(I - 1). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '                'UPGRADE_WARNING: Couldn't resolve default property of object yData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '                'UPGRADE_WARNING: Couldn't resolve default property of object xData(I - 1). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '                'UPGRADE_WARNING: Couldn't resolve default property of object xData(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '                'UPGRADE_WARNING: Couldn't resolve default property of object yData(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '                y = yData(I) - ((xData(I) - x) / (xData(I) - xData(I - 1)) * (yData(I) - yData(I - 1)))
+    '                Exit For
+    '            End If
+    '        Next I
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object xData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        xDataRFV.Values = xData
+    '        'UPGRADE_WARNING: Couldn't resolve default property of object yData. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
+    '        yDataRFV.Values = yData
+    '        LinearInterpolation = y
+    '        Exit Function
 
-ErrorTrap:
-        MsgBox("Interpolation Error")
-    End Function
+    'ErrorTrap:
+    '        MsgBox("Interpolation Error")
+    '    End Function
 
-    Private Sub Sort(ByRef KeyArray As Object, ByRef OtherArray As Object)
+    Private Function SortIndices(ByVal SrcArray As Double())
 
         'Description: Sorts the arrays passed so that smallest values occur first in KeyArray()
         '             does the same rearrangements on OtherArray() so values still correspond
@@ -800,50 +903,32 @@ ErrorTrap:
         On Error GoTo ErrorTrap
         'Declare Variables------------------------------------------------------------------------------
 
-        Dim I As Object
+        Dim I As Short
         Dim J As Short 'Counters
-        Dim Temp As Object 'used to swap values
+        Dim Temp As Short 'used to swap values
+        Dim TempIndices As Short() = {0, 1, 2}
 
         'Procedure--------------------------------------------------------------------------------------
-
-        For I = LBound(KeyArray) To UBound(KeyArray) - 1
-
-            'UPGRADE_WARNING: Couldn't resolve default property of object I. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-            For J = I + 1 To UBound(KeyArray)
-
-                'UPGRADE_WARNING: Couldn't resolve default property of object KeyArray(I). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                'UPGRADE_WARNING: Couldn't resolve default property of object KeyArray(J). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                If KeyArray(J) < KeyArray(I) Then
-                    'swap the xdata
-                    'UPGRADE_WARNING: Couldn't resolve default property of object KeyArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    'UPGRADE_WARNING: Couldn't resolve default property of object Temp. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    Temp = KeyArray(J)
-                    'UPGRADE_WARNING: Couldn't resolve default property of object KeyArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    KeyArray(J) = KeyArray(I)
-                    'UPGRADE_WARNING: Couldn't resolve default property of object Temp. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    'UPGRADE_WARNING: Couldn't resolve default property of object KeyArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    KeyArray(I) = Temp
-
-                    'and the corresponding ydata
-                    'UPGRADE_WARNING: Couldn't resolve default property of object OtherArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    'UPGRADE_WARNING: Couldn't resolve default property of object Temp. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    Temp = OtherArray(J)
-                    'UPGRADE_WARNING: Couldn't resolve default property of object OtherArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    OtherArray(J) = OtherArray(I)
-                    'UPGRADE_WARNING: Couldn't resolve default property of object Temp. Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    'UPGRADE_WARNING: Couldn't resolve default property of object OtherArray(). Click for more: 'ms-help://MS.VSCC.v80/dv_commoner/local/redirect.htm?keyword="6A50421D-15FE-4896-8A1B-2EC21E9037B2"'
-                    OtherArray(I) = Temp
-
+        For I = 0 To UBound(SrcArray) - 1
+            For J = I + 1 To UBound(SrcArray)
+                If SrcArray(J) < SrcArray(I) Then
+                    ' Swap data
+                    'Temp = SortedArray(J)
+                    'SortedArray(J) = SortedArray(I)
+                    'SortedArray(I) = Temp
+                    ' Swap indices
+                    Temp = TempIndices(J)
+                    TempIndices(J) = TempIndices(I)
+                    TempIndices(I) = Temp
                 End If
-
             Next  'J
-
         Next  'I
-        Exit Sub
+        SortIndices = TempIndices
+        Exit Function
 
 ErrorTrap:
         MsgBox("Sorting Error")
-    End Sub
+    End Function
 
     Sub CreatePlot()
         If myPlotH IsNot Nothing Then
