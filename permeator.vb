@@ -493,6 +493,7 @@ ErrorTrap:
         '   FpermAtomFlag:      Double(3)
         '   permIndicesHeteroCopy: Short(3,3)
 
+        ' Step 1 - Declarations
         Dim Fperm() As Double, FpermComp() As Double, Ffeed() As Double, Fcell() As Double
         Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
         Dim Qfeed As Double, Tfeed As Double, Tfeed_K As Double, Pfeed As Double
@@ -500,9 +501,10 @@ ErrorTrap:
         'Dim dx As Double, Ravg As Double, ApermCell As Double
         Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
-        ReDim Ffeed(nComp - 1), Fperm(nComp - 1), FpermComp(nComp - 1), Fcell(nComp - 1)
+        ReDim Fperm(nComp - 1), FpermComp(nComp - 1), Fcell(nComp - 1)
         ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPerm - 1)
 
+        ' Step 2 - Initializations
         ' First check to see if feed flow is unsuitable
         If edfInlet.MolarFlow.Value <= 0 Then
             ' Return the same product values as feed values
@@ -537,9 +539,6 @@ ErrorTrap:
         ' edfDT.SetValue(DT)
         ' edfDH.SetValue(DH)
 
-
-
-
         ' LOOPS: use "i" for atoms (H, D, T) and "j" for molecules (H2, HD, HT, D2, DT, T2)
         ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
         PfeedPerm = 0  ' p1 in thesis
@@ -548,7 +547,7 @@ ErrorTrap:
             PfeedPerm += Pfeed * edfInlet.ComponentMolarFractionValue(iPerm)
         Next
 
-        ' Loop to calculate permeated flow per atomic species
+        ' Step 3 - Calculate atomic diffusion flows
         For i = 0 To nPermAtom - 1
             ' Loop through nPerm (should be 6) to get contribution to partial pressure of atom "i"
             PfeedPermAtom(i) = 0
@@ -563,27 +562,30 @@ ErrorTrap:
             FpermAtom(i) = P(i) * Aperm / thick * (X(i) * Math.Sqrt(PfeedPerm))
         Next
 
+        ' Step 4 - Distribute molecular flow depending on the calculated atomic diffusion flow
+        ' Check if we have all permeating species available in the inlet in `isFeedComplete`
+        Dim isFeedComplete As Boolean = True
+        For i = 0 To nPerm - 1
+            iPerm = permIndices(i)
+            If Ffeed(iPerm) = 0 Then isFeedComplete = False
+        Next
+        ' Select heuristic function to assign molecular distribution
+        If isFeedComplete Then
+            ' OPTION 1: We have all molecules in the feed and there is enough of all of them
+            PermeateHeuristic1(FpermComp, FpermAtom)
+        Else
+            ' OPTION 2: Some molecules in the feed are missing
+            PermeateHeuristic2(FpermComp, Ffeed, FpermAtom)
+        End If
 
-
-        ' TODO: PUT ALL THIS IN A SEPARATE FUNCTION, IT IS TOO MUCH
-
-        ' OPTION 1: We have all molecules in the feed and there is enough of all of them
-        ' We have H, D and T flow, now calculate H2, HD, HT, D2, DT, T2 flows
-        'For j = 0 To nPerm - 1
-        '    iPerm = permIndices(j)
-        '    For i = 0 To nPermAtom - 1
-        '        ' Calculate contribution of each species
-        '        ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
-        '        FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
-        '    Next
-        'Next
-
-        ' OPTION 2: Some molecules in the feed are missing
-        PermeateHeuristic2(FpermComp, Ffeed, FpermAtom)
-
-        ' LAST CHECKS
+        ' Step 5 - Last checks
         ' Check that the total permeated flow is the same from both Atom and Molecular sides
-        If Not Sum(FpermComp) = Sum(FpermAtom) Then
+        ' Use the rounded relative error to measure the closeness of both sums
+        Dim SumComp As Double = Sum(FpermComp)
+        Dim SumAtom As Double = Sum(FpermAtom)
+        Dim RelError As Double
+        RelError = Math.Abs((SumAtom - SumComp) / SumAtom)
+        If Math.Round(RelError, 10) > 0 Then  ' 10 is an arbitrary number of decimals 
             MsgBox("Permeation function did not match required atomic permeation (FpermAtom) with" _
                    + "the actual output (FpermComp)")
         End If
@@ -613,11 +615,31 @@ ErrorTrap:
         '    FpermCells(i) = sumVectorElements(Fperm)
         'Next i
 
-        ' TODO: Check if permeate results bigger than inlet flow
         Permeation = FpermComp
     End Function
 
+    Private Sub PermeateHeuristic1(FpermComp() As Double, FpermAtom() As Double)
+        ' Assign molecular molar flow (FpermComp) based on previosly calculated diffusion atomic
+        ' flow (FpermAtom)
+        ' OPTION 1: Case in which we have H, D and T flow, now calculate H2, HD, HT, D2, DT, T2 flows
+        Dim i As Long, j As Long, iPerm As Long
+        For j = 0 To nPerm - 1
+            iPerm = permIndices(j)
+            For i = 0 To nPermAtom - 1
+                ' Calculate contribution of each species
+                ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
+                FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
+            Next
+        Next
+        ' TODO: Check if the calculated permeation is greater than the inlet to warn the user as we to in PermeateHeuristic2
+        '       and design and check extreme cases where this happens
+    End Sub
+
     Private Sub PermeateHeuristic2(FpermComp() As Double, Ffeed() As Double, FpermAtom() As Double)
+        ' Assign molecular molar flow (FpermComp) based on previosly calculated diffusion atomic
+        ' flow (FpermAtom)
+        ' OPTION 2: not all 6 species are available in the inlet
+
         Dim i As Long
         ' Loop in ascending order of permeation flow rate per atom
         Dim flagLoop As Boolean
@@ -626,7 +648,8 @@ ErrorTrap:
         Dim FpermAtomFlag As Double(), permIndicesHeteroCopy As Short(,)
         ReDim FpermAtomFlag(nPermAtom - 1), permIndicesHeteroCopy(nPermAtom - 1, nPermAtom - 1)
         Array.Copy(FpermAtom, FpermAtomFlag, nPermAtom)
-        Array.Copy(permIndicesHetero, permIndicesHeteroCopy, 9) ' TODO: CHECK THIS COPY WORKS WITH THE 9 ELEMENTS
+        Array.Copy(permIndicesHetero, permIndicesHeteroCopy, 9)
+
         ' Sort flows in ascending order and return the indices of the ordered list
         permIndicesSorted = SortIndices(FpermAtom)
 
@@ -743,7 +766,7 @@ ErrorTrap:
             {permIndices(2), permIndices(4), -1}
         }
         permIndicesHomo = {permIndices(0), permIndices(3), permIndices(5)}
-        nPermAtom = isH + isD + isT ' TODO: check that we can sum booleans to get a long
+        nPermAtom = isH + isD + isT
     End Sub
     Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
         ' Updates vector of streams (vector of 3 or 4 Fluids) and,
@@ -785,7 +808,7 @@ ErrorTrap:
     End Function
     Private Function Sum(myArray() As Double) As Double
         Dim i As Long
-        For i = 0 To UBound(myArray) - 1
+        For i = 0 To UBound(myArray)
             Sum += myArray(i)
         Next
     End Function
@@ -827,7 +850,7 @@ ErrorTrap:
         ' Check if the input 1D array is full of zeros
         Dim i As Long
         IsZero = True
-        For i = 0 To UBound(myArray) - 1
+        For i = 0 To UBound(myArray)
             If myArray(i) <> 0 Then
                 IsZero = False
             End If
