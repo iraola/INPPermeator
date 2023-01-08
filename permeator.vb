@@ -9,16 +9,15 @@ Imports HYSYS
     '                             VB Variables                                  '
     '***************************************************************************'
     ' Indices of permeated components: in this order: H2, HD, HT, D2, DT, T2
-    Private idxH2 As Long, idxHD As Long, idxHT As Long
-    Private idxD2 As Long, idxDT As Long, idxT2 As Long
-    Private nPerm As Short = 6          ' number of permeating species (6 if all hydrogens)
-    Private nHeteroNuclear As Short = 3
+    Private ReadOnly nPerm As Short = 6          ' number of permeating species (6 if all hydrogens)
+    Private ReadOnly nHeteroNuclear As Short = 3
     Private nPermAtom As Short          ' number of permeating atoms (3 if H, D and T)
-    Private permCoeffs As Double(,) = { ' array of coefficients to compute partial pressures
-        {1, 0.5, 0.5, 0, 0, 0},         ' contribution per diatomic molecule
+    Private ReadOnly permCoeffs As Double(,) = { ' array of coefficients to compute partial pressures
+        {1, 0.5, 0.5, 0, 0, 0},                  ' contribution per diatomic molecule
         {0, 0.5, 0, 1, 0.5, 0},
         {0, 0, 0.5, 0, 0.5, 1}
     }
+    Private permIndicesHomo As Short()
     Private permIndicesHetero As Short(,) ' array of indices to locate heteronuclear molecules
     ' for each atom in HYSYS, with the shape: {{-1, HD, HT}, {HD, -1, DT}, {HT, DT, -1}}
     Private permIndices As Double()     ' array of indices to adress each diatomic species in
@@ -75,7 +74,7 @@ Imports HYSYS
     Dim fluidList() As Fluid
     Dim StreamList() As ProcessStream
     ' Constants
-    Private Const R As Double = 8.314472  ' [kJ/kmol�K]
+    Private Const R As Double = 8.314472  ' [kJ/kmol-K]
     Private Const MOLFLOW_UNITS As String = "kgmole/s"
 
     '***************************************************************************'
@@ -530,7 +529,7 @@ ErrorTrap:
 
         ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
         Dim P() As Double
-        P = {0.00000000002, 0.00000000002, 0.00000000002} ' UNITS SHOULD BE: KMOL · m-1 · s -1 · Pa-0.5
+        P = {0.00000000002, 0.000000000012, 0.0000000000095} ' UNITS SHOULD BE: KMOL · m-1 · s -1 · Pa-0.5
         ' (instead of mol · m-1 · s -1 · Pa-0.5)
         ' TODO: MULTIPLY P TO AUTOMATICALLY GET FLOWS OF kmol/s (HYSYS default units)
 
@@ -602,7 +601,6 @@ ErrorTrap:
                 If iMolec < 0 Then Continue For
                 ' First check if there is feed flow rate at all for "iMolec"
                 If Ffeed(iMolec) > 0 Then
-                    ' This means it has at least one atom in common with "i"
                     If FpermAtomFlag(iAtom) >= 2 * Ffeed(iMolec) Then
                         ' We exhaust all inlet flow of this molecule in permeation
                         FpermComp(iMolec) += 2 * Ffeed(iMolec)
@@ -627,46 +625,34 @@ ErrorTrap:
             Next
         Next
 
-        ' Homonuclears loop last
-        'For i = 0 To nPermAtom - 1
-        '    iAtom = permIndicesSorted(i)
-        '    ' heteronuclears first
-        '    flagLoop = False
-        '    For k = 0 To nHeteroNuclear - 1
-        '        ' With heteronuclears we need double the flow rate bc they contribute by half
-        '        iMolec = permIndicesHeteroCopy(iAtom, k)
-        '        ' Continue to next iteration if element is -1
-        '        If iMolec < 0 Then Continue For
-        '        ' First check if there is feed flow rate at all for "iMolec"
-        '        If Ffeed(iMolec) > 0 Then
-        '            ' This means it has at least one atom in common with "i"
-        '            If FpermAtomFlag(iAtom) >= 2 * Ffeed(iMolec) Then
-        '                ' We exhaust all inlet flow of this molecule in permeation
-        '                FpermComp(iMolec) += 2 * Ffeed(iMolec)
-        '            Else
-        '                ' Permeation of atom "i" is finished
-        '                FpermComp(iMolec) += 2 * FpermAtomFlag(iAtom)
-        '                flagLoop = True
-        '            End If
-        '            ' Subtract flow from our flag permeation array for both atoms affected
-        '            ' without the x2!
-        '            FpermAtomFlag(iAtom) -= FpermComp(iMolec) / 2   ' current atom
-        '            FpermAtomFlag(k) -= FpermComp(iMolec) / 2       ' the other atom affected ' TODO: this could become negative!
-        '            ' Remove molecule from matrix to avoid passing through it twice
-        '            ' (since permIndicesHetero is upper diagonal)
-        '            permIndicesHeteroCopy(iAtom, k) = -1
-        '            permIndicesHeteroCopy(k, iAtom) = -1
-        '            ' Exit For loop in case we finished 'iAtom' permeation
-        '            If flagLoop Then
-        '                Exit For
-        '            End If
-        '        End If
-        '    Next
-        'Next
+        ' Homonuclears loop last (simpler loop)
+        For i = 0 To nPermAtom - 1
+            iAtom = permIndicesSorted(i)
+            iMolec = permIndicesHomo(iAtom)
+            ' First check if there is feed flow rate at all for "iMolec"
+            If Ffeed(iMolec) > 0 Then
+                If FpermAtomFlag(iAtom) >= Ffeed(iMolec) Then
+                    ' We exhaust all inlet flow of this molecule in permeation
+                    FpermComp(iMolec) += Ffeed(iMolec)
+                Else
+                    ' Permeation of atom "i" is finished
+                    FpermComp(iMolec) += FpermAtomFlag(iAtom)
+                End If
+                ' Subtract flow from our flag permeation array
+                FpermAtomFlag(iAtom) -= FpermComp(iMolec)
+            End If
+        Next
 
-
-
-
+        ' LAST CHECKS
+        ' At this point, FpermAtomFlag should be empty
+        If Not IsZero(FpermAtomFlag) Then
+            MsgBox("Permeation function did not exhaust FpermAtom completely")
+        End If
+        ' Check that the total permeated flow is the same from both Atom and Molecular sides
+        If Not Sum(FpermComp) = Sum(FpermAtom) Then
+            MsgBox("Permeation function did not match required atomic permeation (FpermAtom) with" _
+                   + "the actual output (FpermComp)")
+        End If
 
         ' LOOP over cells
         'For i = 0 To nCell - 1
@@ -750,6 +736,7 @@ ErrorTrap:
             {permIndices(1), -1, permIndices(4)},
             {permIndices(2), permIndices(4), -1}
         }
+        permIndicesHomo = {permIndices(0), permIndices(3), permIndices(5)}
         nPermAtom = isH + isD + isT ' TODO: check that we can sum booleans to get a long
     End Sub
     Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
@@ -790,6 +777,12 @@ ErrorTrap:
         Next i
         LengthVector = lenvec
     End Function
+    Private Function Sum(myArray() As Double) As Double
+        Dim i As Long
+        For i = 0 To UBound(myArray) - 1
+            Sum += myArray(i)
+        Next
+    End Function
     Private Function SubtractVectorsIf(ByRef A1, ByRef A2) As Double()
         ' Subtract 1D arrays avoiding negative outputs.
         '
@@ -823,6 +816,16 @@ ErrorTrap:
             End If
         Next i
         SubtractVectorsIf = A
+    End Function
+    Private Function IsZero(myArray As Double()) As Boolean
+        ' Check if the input 1D array is full of zeros
+        Dim i As Long
+        IsZero = True
+        For i = 0 To UBound(myArray) - 1
+            If myArray(i) <> 0 Then
+                IsZero = False
+            End If
+        Next
     End Function
     '    Function LinearInterpolation(ByRef xDataRFV As InternalRealFlexVariable, ByRef yDataRFV As InternalRealFlexVariable, ByRef xPoint As RealVariable) As Double
     '        'This method linear interpolates to find the y point that coresponds to the known
