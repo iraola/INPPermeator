@@ -579,6 +579,46 @@ ErrorTrap:
         'Next
 
         ' OPTION 2: Some molecules in the feed are missing
+        PermeateHeuristic2(FpermComp, Ffeed, FpermAtom)
+
+        ' LAST CHECKS
+        ' Check that the total permeated flow is the same from both Atom and Molecular sides
+        If Not Sum(FpermComp) = Sum(FpermAtom) Then
+            MsgBox("Permeation function did not match required atomic permeation (FpermAtom) with" _
+                   + "the actual output (FpermComp)")
+        End If
+
+        ' LOOP over cells
+        'For i = 0 To nCell - 1
+        '    ' Calculate concentrations [kgmole/m3]
+        '    CHTsi = Fcell(idxHT) / Qfeed
+        '    CHsi = Fcell(idxH2) / Qfeed
+        '    CTsi = Fcell(idxT2) / Qfeed
+        '    CTso = 0
+        '    CHso = 0
+        '    CHTso = 0
+        '    If CTi = -32767 Then CTi = 0
+        '    If CTo = -32767 Then CTo = 0
+        '    If CHTi = -32767 Then CHTi = 0
+        '    If CHTo = -32767 Then CHTo = 0
+        '    If CHi = -32767 Then CHi = 0
+        '    If CHo = -32767 Then CHo = 0
+        '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s�m2] -> multiply by "ApermCell" -> [kmol/s]
+        '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
+        '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
+        '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
+        '    ' Molar flow component vector in next cell
+        '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
+        '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
+        '    FpermCells(i) = sumVectorElements(Fperm)
+        'Next i
+
+        ' TODO: Check if permeate results bigger than inlet flow
+        Permeation = FpermComp
+    End Function
+
+    Private Sub PermeateHeuristic2(FpermComp() As Double, Ffeed() As Double, FpermAtom() As Double)
+        Dim i As Long
         ' Loop in ascending order of permeation flow rate per atom
         Dim flagLoop As Boolean
         Dim permIndicesSorted As Short(), iAtom As Short, k As Short, iMolec As Short
@@ -643,45 +683,11 @@ ErrorTrap:
             End If
         Next
 
-        ' LAST CHECKS
         ' At this point, FpermAtomFlag should be empty
         If Not IsZero(FpermAtomFlag) Then
             MsgBox("Permeation function did not exhaust FpermAtom completely")
         End If
-        ' Check that the total permeated flow is the same from both Atom and Molecular sides
-        If Not Sum(FpermComp) = Sum(FpermAtom) Then
-            MsgBox("Permeation function did not match required atomic permeation (FpermAtom) with" _
-                   + "the actual output (FpermComp)")
-        End If
-
-        ' LOOP over cells
-        'For i = 0 To nCell - 1
-        '    ' Calculate concentrations [kgmole/m3]
-        '    CHTsi = Fcell(idxHT) / Qfeed
-        '    CHsi = Fcell(idxH2) / Qfeed
-        '    CTsi = Fcell(idxT2) / Qfeed
-        '    CTso = 0
-        '    CHso = 0
-        '    CHTso = 0
-        '    If CTi = -32767 Then CTi = 0
-        '    If CTo = -32767 Then CTo = 0
-        '    If CHTi = -32767 Then CHTi = 0
-        '    If CHTo = -32767 Then CHTo = 0
-        '    If CHi = -32767 Then CHi = 0
-        '    If CHo = -32767 Then CHo = 0
-        '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s�m2] -> multiply by "ApermCell" -> [kmol/s]
-        '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
-        '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
-        '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
-        '    ' Molar flow component vector in next cell
-        '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
-        '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
-        '    FpermCells(i) = sumVectorElements(Fperm)
-        'Next i
-
-        ' TODO: Check if permeate results bigger than inlet flow
-        Permeation = FpermComp
-    End Function
+    End Sub
 
 
 
