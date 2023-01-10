@@ -1,4 +1,4 @@
-# INPPermeator
+# Permeator
 
 Migration of the previous VB6 extension to VB.NET and refinement of the permeation function.
 
