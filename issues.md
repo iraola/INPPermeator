@@ -14,5 +14,8 @@
 * Execute(). Issues with the fluid readiness check before doing `myContainer.SolveComplete()`:
 
     `If edfInlet.DuplicateFluid.IsUpToDate And edfPermeate.DuplicateFluid.IsUpToDate And edfRetentate.DuplicateFluid.IsUpToDate Then`
- b 
+ 
     It is good practice to use it, but need to be sure the streams and correctly defined and solved after doing `myContainer.Balance()`
+* Heuristics for distributing atomic diffusing flow into molecular gas flow. Issues:
+  - one of the molecular flows is lower and exhausts in the middle of the permeation. This effect might be weaker with the discretization of the permeator.
+  - only heteronuclear flow + with different permeabilities between atoms might cause the lower permeability species to limit permeation.

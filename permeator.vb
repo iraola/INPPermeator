@@ -476,22 +476,19 @@ ErrorTrap:
     '***************************************************************************'
     Private Function Permeation()
         ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
-        '   Ffeed(nComp):       vector      inlet molar flow (per component)
-        '   Fperm(nComp):       vector      permeated molar flow in one cell (per component)
-        '   FpermTotal(nComp):  vector      aggregates molar flow permeated for each cell (per component)
-        '   Fcell(nComp):       vector      similar to "Ffeed" but for each cell calculated from previous cell
-        '   FpermCells(Npoints):vector      collect total permeation in each cell for plotting purposes
-        '
-        '   FpermAtom:          Double(3)   Output of the diffusion part of code (H, D, T mole flows)
-        '   FfeedPerm:
-        '   PfeedAtom:
-        '   PfeedPermAtom:
-        '   X:
-        '
-        '   flagLoop:           Boolean     Used to assert if H, D or T permeation finished and break loop
-        '   permIndicesSorted:  Short(3)    Sorts indices to address FpermAtom in ascending order
-        '   FpermAtomFlag:      Double(3)
-        '   permIndicesHeteroCopy: Short(3,3)
+        '   Ffeed:          Double(nComp)   inlet molar flow (per component)
+        '   Fperm:          Double(nComp)   permeated molar flow in one cell (per component)
+        '   FpermTotal:     Double(nComp)   aggregates molar flow permeated for each cell
+        '                                   (per component)
+        '   Fcell:          Double(nComp)   similar to "Ffeed" but for each cell calculated from
+        '                                   previous cell
+        '   FpermCells:     Double(Npoints) collect total permeation in each cell for plotting purposes
+        '   FpermAtom:      Double(3)       Output of the diffusion part of code (H, D, T mole flows)
+        '   FpermComp:      Double(nComp)   Output of the function. Permeated flow (per component)
+        '   PfeedPermAtom:  Double(3)       Partial pressure of a specific atom contributed by
+        '                                   various molecules for the diffusion
+        '   X:              Double(3)       Fraction variable to take into account contribution of
+        '                                   each atom to the inlet permeation pressure
 
         ' Step 1 - Declarations
         Dim Fperm() As Double, FpermComp() As Double, Ffeed() As Double, Fcell() As Double
@@ -502,7 +499,7 @@ ErrorTrap:
         Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
         ReDim Fperm(nComp - 1), FpermComp(nComp - 1), Fcell(nComp - 1)
-        ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPerm - 1)
+        ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPermAtom - 1)
 
         ' Step 2 - Initializations
         ' First check to see if feed flow is unsuitable
@@ -638,7 +635,13 @@ ErrorTrap:
     Private Sub PermeateHeuristic2(FpermComp() As Double, Ffeed() As Double, FpermAtom() As Double)
         ' Assign molecular molar flow (FpermComp) based on previosly calculated diffusion atomic
         ' flow (FpermAtom)
+        '
         ' OPTION 2: not all 6 species are available in the inlet
+        '
+        '   flagLoop:           Boolean     Used to assert if H, D or T permeation finished and break loop
+        '   permIndicesSorted:  Short(3)    Sorts indices to address FpermAtom in ascending order
+        '   FpermAtomFlag:      Double(3)
+        '   permIndicesHeteroCopy: Short(3,3)
 
         Dim i As Long
         ' Loop in ascending order of permeation flow rate per atom
