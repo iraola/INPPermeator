@@ -472,7 +472,7 @@ ErrorTrap:
 
 
     '***************************************************************************'
-    '                            Main Functions                                 '
+    '                         Permeation Functions                              '
     '***************************************************************************'
     Private Function Permeation()
         ' Calculate vector of permeated species in default HYSYS magnitude: "kmol/s"
@@ -723,7 +723,7 @@ ErrorTrap:
 
 
     '***************************************************************************'
-    '                         Auxiliary Functions                               '
+    '                      HYSYS Flowsheet Functions                            '
     '***************************************************************************'
     Private Sub IniCompIndex()
         ' Loop for setting index for components that can permeate (based on Inlet's basis manager)
@@ -813,6 +813,12 @@ ErrorTrap:
             stream.ComponentMolarFlow.Calculate(componentMolarFLow, MOLFLOW_UNITS)
         End If
     End Sub
+
+
+
+    '***************************************************************************'
+    '                         Auxiliary Functions                               '
+    '***************************************************************************'
 
     Private Function LengthVector(L, n) As Double()
         ' Builds a vector of equidistant elements representing the position [m] of each cell
