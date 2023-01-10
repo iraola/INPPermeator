@@ -482,21 +482,21 @@ ErrorTrap:
         '                                   previous cell
         '   FpermCells:     Double(Npoints) collect total permeation in each cell for plotting purposes
         '   FpermAtom:      Double(3)       Output of the diffusion part of code (H, D, T mole flows)
-        '   FpermComp:      Double(nComp)   Output of the function. Permeated flow (per component)
+        '   FpermMolec:      Double(nComp)   Output of the function. Permeated flow (per component)
         '   PfeedPermAtom:  Double(3)       Partial pressure of a specific atom contributed by
         '                                   various molecules for the diffusion
         '   X:              Double(3)       Fraction variable to take into account contribution of
         '                                   each atom to the inlet permeation pressure
 
         ' Step 1 - Declarations
-        Dim Fperm() As Double, FpermComp() As Double, Ffeed() As Double, Fcell() As Double
+        Dim Fperm() As Double, FpermMolec() As Double, Ffeed() As Double, Fcell() As Double
         Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
         Dim Qfeed As Double, Tfeed As Double, Tfeed_K As Double, Pfeed As Double
         Dim PfeedPerm As Double, molFrac As Double
         'Dim dx As Double, Ravg As Double, ApermCell As Double
         Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
         nComp = UBound(edfInlet.ComponentMolarFlowValue) + 1
-        ReDim Fperm(nComp - 1), FpermComp(nComp - 1), Fcell(nComp - 1)
+        ReDim Fperm(nComp - 1), FpermMolec(nComp - 1), Fcell(nComp - 1)
         ReDim FpermAtom(nPermAtom - 1), X(nPermAtom - 1), PfeedPermAtom(nPermAtom - 1)
 
         ' Step 2 - Initializations
@@ -543,7 +543,7 @@ ErrorTrap:
         Next
         If PfeedPerm = 0 Then
             ' No permeating species in, exit permeation
-            Permeation = FpermComp
+            Permeation = FpermMolec
             Exit Function
         End If
 
@@ -572,22 +572,22 @@ ErrorTrap:
         ' Select heuristic function to assign molecular distribution
         If isFeedComplete Then
             ' OPTION 1: We have all molecules in the feed and there is enough of all of them
-            PermeateHeuristic1(FpermComp, FpermAtom)
+            PermeateHeuristic1(FpermMolec, FpermAtom)
         Else
             ' OPTION 2: Some molecules in the feed are missing
-            PermeateHeuristic2(FpermComp, Ffeed, FpermAtom)
+            PermeateHeuristic2(FpermMolec, Ffeed, FpermAtom)
         End If
 
         ' Step 5 - Last checks
         ' Check that the total permeated flow is the same from both Atom and Molecular sides
         ' Use the rounded relative error to measure the closeness of both sums
-        Dim SumComp As Double = Sum(FpermComp)
+        Dim SumMolec As Double = Sum(FpermMolec)
         Dim SumAtom As Double = Sum(FpermAtom)
         Dim RelError As Double
-        RelError = Math.Abs((SumAtom - SumComp) / SumAtom)
+        RelError = Math.Abs((SumAtom - SumMolec) / SumAtom)
         If Math.Round(RelError, 10) > 0 Then  ' 10 is an arbitrary number of decimals 
             MsgBox("Permeation function did not match required atomic permeation (FpermAtom) with" _
-                   + "the actual output (FpermComp)")
+                   + "the actual output (FpermMolec)")
         End If
 
         ' LOOP over cells
@@ -615,11 +615,11 @@ ErrorTrap:
         '    FpermCells(i) = sumVectorElements(Fperm)
         'Next i
 
-        Permeation = FpermComp
+        Permeation = FpermMolec
     End Function
 
-    Private Sub PermeateHeuristic1(FpermComp() As Double, FpermAtom() As Double)
-        ' Assign molecular molar flow (FpermComp) based on previosly calculated diffusion atomic
+    Private Sub PermeateHeuristic1(FpermMolec() As Double, FpermAtom() As Double)
+        ' Assign molecular molar flow (FpermMolec) based on previosly calculated diffusion atomic
         ' flow (FpermAtom)
         ' OPTION 1: Case in which we have H, D and T flow, now calculate H2, HD, HT, D2, DT, T2 flows
         Dim i As Long, j As Long, iPerm As Long
@@ -628,15 +628,15 @@ ErrorTrap:
             For i = 0 To nPermAtom - 1
                 ' Calculate contribution of each species
                 ' Divide by 2 means e.g. 1 (H2) + 0.5 (HD) + 0.5 (HT) = 2
-                FpermComp(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
+                FpermMolec(iPerm) += FpermAtom(i) * (permCoeffs(i, j) / 2)
             Next
         Next
         ' TODO: Check if the calculated permeation is greater than the inlet to warn the user as we to in PermeateHeuristic2
         '       and design and check extreme cases where this happens
     End Sub
 
-    Private Sub PermeateHeuristic2(FpermComp() As Double, Ffeed() As Double, FpermAtom() As Double)
-        ' Assign molecular molar flow (FpermComp) based on previosly calculated diffusion atomic
+    Private Sub PermeateHeuristic2(FpermMolec() As Double, Ffeed() As Double, FpermAtom() As Double)
+        ' Assign molecular molar flow (FpermMolec) based on previosly calculated diffusion atomic
         ' flow (FpermAtom)
         '
         ' OPTION 2: not all 6 species are available in the inlet
@@ -670,18 +670,18 @@ ErrorTrap:
                 If iMolec < 0 Then Continue For
                 ' First check if there is feed flow rate at all for "iMolec"
                 If Ffeed(iMolec) > 0 Then
-                    If FpermAtomFlag(iAtom) >= 2 * Ffeed(iMolec) Then
-                        ' We exhaust all inlet flow of this molecule in permeation
-                        FpermComp(iMolec) += 2 * Ffeed(iMolec)
+                    If Ffeed(iMolec) / 2 <= FpermAtomFlag(iAtom) Then
+                        ' We exhaust all inlet flow of this molecule for permeation
+                        FpermMolec(iMolec) += Ffeed(iMolec)
                     Else
-                        ' Permeation of atom "i" is finished
-                        FpermComp(iMolec) += 2 * FpermAtomFlag(iAtom)
+                        ' Permeation of atom "i" is finished and there will be leftovers of this molecule in retentate
+                        FpermMolec(iMolec) += 2 * FpermAtomFlag(iAtom)
                         flagLoop = True
                     End If
                     ' Subtract flow from our flag permeation array for both atoms affected
                     ' without the x2!
-                    FpermAtomFlag(iAtom) -= FpermComp(iMolec) / 2   ' current atom
-                    FpermAtomFlag(k) -= FpermComp(iMolec) / 2       ' the other atom affected ' TODO: this could become negative!
+                    FpermAtomFlag(iAtom) -= FpermMolec(iMolec) / 2   ' current atom
+                    FpermAtomFlag(k) -= FpermMolec(iMolec) / 2       ' the other atom affected ' TODO: this could become negative! (but it shouldn't because we go in ascending order)
                     ' Remove molecule from matrix to avoid passing through it twice
                     ' (since permIndicesHetero is upper diagonal)
                     permIndicesHeteroCopy(iAtom, k) = -1
@@ -702,13 +702,13 @@ ErrorTrap:
             If Ffeed(iMolec) > 0 Then
                 If FpermAtomFlag(iAtom) >= Ffeed(iMolec) Then
                     ' We exhaust all inlet flow of this molecule in permeation
-                    FpermComp(iMolec) += Ffeed(iMolec)
+                    FpermMolec(iMolec) += Ffeed(iMolec)
                 Else
                     ' Permeation of atom "i" is finished
-                    FpermComp(iMolec) += FpermAtomFlag(iAtom)
+                    FpermMolec(iMolec) += FpermAtomFlag(iAtom)
                 End If
                 ' Subtract flow from our flag permeation array
-                FpermAtomFlag(iAtom) -= FpermComp(iMolec)
+                FpermAtomFlag(iAtom) -= FpermMolec(iMolec)
             End If
         Next
 
