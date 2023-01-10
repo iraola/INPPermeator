@@ -23,8 +23,6 @@ Imports HYSYS
     Private permIndices As Double()     ' array of indices to adress each diatomic species in
     ' hysys component list
 
-    ' Permeation error flags
-    Private flagRet As Boolean, flagPerm As Boolean
     ' Plot
     Dim myPlotNameH As InternalTextVariable
     Dim myPlotH As TwoDimensionalPlot
@@ -784,24 +782,34 @@ ErrorTrap:
         ' To do this, update component molar flows AND total molar flow.
         '
         Dim inletMolarFlows() As Double, retMolarFlows() As Double
-        Dim nComp As Long
+        Dim nComp As Long, flagRet As Boolean, flagPerm As Boolean
         nComp = UBound(permMolarFlows) + 1
         ' Calculate retentate component flows
         inletMolarFlows = streams(0).ComponentMolarFlowValue
         retMolarFlows = SubtractVectorsIf(inletMolarFlows, permMolarFlows)
         ' Set the fictitious molar flow vectors to the actual ones
-        SetValueComponentMolarFlow(streams(1), retMolarFlows, nComp)    ' Retentate
-        SetValueComponentMolarFlow(streams(2), permMolarFlows, nComp)   ' Permeate
+        flagRet = SetValueComponentMolarFlow(streams(1), retMolarFlows, nComp)    ' Retentate
+        flagPerm = SetValueComponentMolarFlow(streams(2), permMolarFlows, nComp)   ' Permeate
         ' Set total molar flow to each fluid
         streams(1).MolarFlow.Calculate(Sum(retMolarFlows), MOLFLOW_UNITS)       ' Retentate
         streams(2).MolarFlow.Calculate(Sum(permMolarFlows), MOLFLOW_UNITS)      ' Permeate
+        ' Set traces if empty streams
+        If flagRet Then myContainer.Trace(myContainer.name + ": WARNING - " +
+                                          " returns an empty retentate stream", False)
+        If flagPerm Then myContainer.Trace(myContainer.name + ": WARNING - " +
+                                          " returns an empty permeate stream", False)
+
     End Sub
 
-    Private Sub SetValueComponentMolarFlow(stream As ProcessStream, componentMolarFLow() As Double, nComp As Long)
+    Private Function SetValueComponentMolarFlow(stream As ProcessStream, componentMolarFLow() As Double, nComp As Long) As Boolean
         ' Use ComponentMolarFlow.Calculate if the provided array is nonzero, otherwise just set
         ' some molar fraction with ComponentMolarFraction.Calculate so that HYSYS can calculate the
         ' stream
+        '
+        ' Return flag = True if zero flow
+        '
         If Sum(componentMolarFLow) = 0 Then
+            SetValueComponentMolarFlow = True
             ' Stream is empty
             Dim auxMolarFractions As Double()
             ReDim auxMolarFractions(nComp - 1)
@@ -809,10 +817,11 @@ ErrorTrap:
             auxMolarFractions(0) = 1
             stream.ComponentMolarFraction.Calculate(auxMolarFractions)
         Else
+            SetValueComponentMolarFlow = False
             ' Assign flows normally
             stream.ComponentMolarFlow.Calculate(componentMolarFLow, MOLFLOW_UNITS)
         End If
-    End Sub
+    End Function
 
 
 
