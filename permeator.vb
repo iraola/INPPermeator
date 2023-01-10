@@ -543,6 +543,11 @@ ErrorTrap:
             iPerm = permIndices(j)
             PfeedPerm += Pfeed * edfInlet.ComponentMolarFractionValue(iPerm)
         Next
+        If PfeedPerm = 0 Then
+            ' No permeating species in, exit permeation
+            Permeation = FpermComp
+            Exit Function
+        End If
 
         ' Step 3 - Calculate atomic diffusion flows
         For i = 0 To nPermAtom - 1
@@ -776,27 +781,39 @@ ErrorTrap:
         ' specifically, the products: Retentate (index 1) and Permeate
         ' (index 2), with the new permeated composition.
         '
-        ' To do this, updates component molar flows AND total molar flow.
+        ' To do this, update component molar flows AND total molar flow.
         '
         Dim inletMolarFlows() As Double, retMolarFlows() As Double
-        Dim i As Long, nComp As Long
+        Dim nComp As Long
         nComp = UBound(permMolarFlows) + 1
         ' Calculate retentate component flows
         inletMolarFlows = streams(0).ComponentMolarFlowValue
         retMolarFlows = SubtractVectorsIf(inletMolarFlows, permMolarFlows)
         ' Set the fictitious molar flow vectors to the actual ones
-        streams(1).ComponentMolarFlow.Calculate(retMolarFlows, MOLFLOW_UNITS)  ' Retentate
-        streams(2).ComponentMolarFlow.Calculate(permMolarFlows, MOLFLOW_UNITS) ' Permeate
+        SetValueComponentMolarFlow(streams(1), retMolarFlows, nComp)    ' Retentate
+        SetValueComponentMolarFlow(streams(2), permMolarFlows, nComp)   ' Permeate
         ' Set total molar flow to each fluid
-        Dim totalRetMolarFLow As Double = 0
-        Dim totalPermMolarFlow As Double = 0
-        For i = 0 To nComp - 1
-            totalRetMolarFLow += retMolarFlows(i)
-            totalPermMolarFlow += permMolarFlows(i)
-        Next
-        streams(1).MolarFlow.Calculate(totalRetMolarFLow, MOLFLOW_UNITS)       ' Retentate
-        streams(2).MolarFlow.Calculate(totalPermMolarFlow, MOLFLOW_UNITS)      ' Permeate
+        streams(1).MolarFlow.Calculate(Sum(retMolarFlows), MOLFLOW_UNITS)       ' Retentate
+        streams(2).MolarFlow.Calculate(Sum(permMolarFlows), MOLFLOW_UNITS)      ' Permeate
     End Sub
+
+    Private Sub SetValueComponentMolarFlow(stream As ProcessStream, componentMolarFLow() As Double, nComp As Long)
+        ' Use ComponentMolarFlow.Calculate if the provided array is nonzero, otherwise just set
+        ' some molar fraction with ComponentMolarFraction.Calculate so that HYSYS can calculate the
+        ' stream
+        If Sum(componentMolarFLow) = 0 Then
+            ' Stream is empty
+            Dim auxMolarFractions As Double()
+            ReDim auxMolarFractions(nComp - 1)
+            ' Arbitrarily assign 1 to the first component
+            auxMolarFractions(0) = 1
+            stream.ComponentMolarFraction.Calculate(auxMolarFractions)
+        Else
+            ' Assign flows normally
+            stream.ComponentMolarFlow.Calculate(componentMolarFLow, MOLFLOW_UNITS)
+        End If
+    End Sub
+
     Private Function LengthVector(L, n) As Double()
         ' Builds a vector of equidistant elements representing the position [m] of each cell
         Dim i As Long
