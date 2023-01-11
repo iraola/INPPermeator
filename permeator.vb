@@ -11,7 +11,7 @@ Imports HYSYS
     ' Indices of permeated components: in this order: H2, HD, HT, D2, DT, T2
     Private ReadOnly nPerm As Short = 6          ' number of permeating species (6 if all hydrogens)
     Private ReadOnly nHeteroNuclear As Short = 3
-    Private nPermAtom As Short          ' number of permeating atoms (3 if H, D and T)
+    Private ReadOnly nPermAtom As Short = 3      ' number of permeating atoms (3 if H, D and T)
     Private ReadOnly permCoeffs As Double(,) = { ' array of coefficients to compute partial pressures
         {1, 0.5, 0.5, 0, 0, 0},                  ' contribution per diatomic molecule
         {0, 0.5, 0, 1, 0.5, 0},
@@ -71,9 +71,20 @@ Imports HYSYS
     ' Streams
     Dim fluidList() As Fluid
     Dim StreamList() As ProcessStream
+
     ' Constants
-    Private Const R As Double = 8.314472  ' [kJ/kmol-K]
+    Private Const R As Double = 8.314472    ' kJ/kmol-K
     Private Const MOLFLOW_UNITS As String = "kgmole/s"
+    Private ReadOnly A As Double() = {      ' mol · m-1 · s -1 · Pa-0.5
+        0.0000000558,
+        0.0000000343,
+        0.0000000263207547169811
+    }
+    Private ReadOnly E As Double() = {      ' kJ/kmol
+        -6304,
+        -6156,
+        -6304
+    }
 
     '***************************************************************************'
     '                           OLD - to be deleted                             '
@@ -489,7 +500,7 @@ ErrorTrap:
         ' Step 1 - Declarations
         Dim Fperm() As Double, FpermMolec() As Double, Ffeed() As Double, Fcell() As Double
         Dim FpermAtom() As Double, X() As Double, PfeedPermAtom() As Double
-        Dim Qfeed As Double, Tfeed As Double, Tfeed_K As Double, Pfeed As Double
+        Dim Qfeed As Double, TfeedK As Double, PfeedPa As Double
         Dim PfeedPerm As Double, molFrac As Double
         'Dim dx As Double, Ravg As Double, ApermCell As Double
         Dim i As Long, j As Long, iPerm As Long, nComp As Long, nCell As Long
@@ -512,9 +523,8 @@ ErrorTrap:
         ' ReDim FpermCells(nCell - 1)
 
         ' Get inlet stream parameters
-        Pfeed = edfInlet.Pressure.GetValue("kPa")  ' TODO: check units of permeability to match this pressure's
-        Tfeed = edfInlet.Temperature.GetValue("C")
-        Tfeed_K = edfInlet.Temperature.GetValue("K")
+        PfeedPa = edfInlet.Pressure.GetValue("Pa")      ' Pascal to match permeability formula
+        TfeedK = edfInlet.Temperature.GetValue("K")     ' K degrees to match permeability formula
         Qfeed = edfInlet.ActualVolumeFlowValue
         Ffeed = edfInlet.ComponentMolarFlowValue              ' molar flow per component
 
@@ -522,23 +532,24 @@ ErrorTrap:
         'ApermCell = Aperm / nCell                  ' permeation surface per differential cell
         'Fcell = Ffeed
 
-        ' TODO: setup Permeabilities - calculate them here and write them in EDF (as read-only)
+        ' Setup Permeabilities - calculate them and write in EDF (read-only)
         Dim P() As Double
-        P = {0.00000000002, 0.000000000012, 0.0000000000095} ' UNITS SHOULD BE: KMOL · m-1 · s -1 · Pa-0.5
-        ' (instead of mol · m-1 · s -1 · Pa-0.5)
-        ' TODO: MULTIPLY P TO AUTOMATICALLY GET FLOWS OF kmol/s (HYSYS default units)
-
-        ' TODO: Set calculated PERMEABILITY values in edf for user's visualization
-        ' edfPH.SetValue(PH)
-        ' edfPD.SetValue(PD)
-        ' edfPT.SetValue(PT)
+        ReDim P(nPermAtom - 1)
+        ' We calculate Input units as (kmol · m-1 · s -1 · Pa-0.5), therefore the division by 1000
+        For i = 0 To nPermAtom
+            P(i) = A(i) * Math.Exp(E(i) / (R * TfeedK)) / 1000  ' A() comes in mol, not kmol
+        Next
+        ' Publish permeabilities in mol
+        edfPH.SetValue(P(0) * 1000)
+        edfPD.SetValue(P(1) * 1000)
+        edfPT.SetValue(P(2) * 1000)
 
         ' LOOPS: use "i" for atoms (H, D, T) and "j" for molecules (H2, HD, HT, D2, DT, T2)
         ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
         PfeedPerm = 0  ' p1 in thesis
         For j = 0 To nPerm - 1
             iPerm = permIndices(j)
-            PfeedPerm += Pfeed * edfInlet.ComponentMolarFractionValue(iPerm)
+            PfeedPerm += PfeedPa * edfInlet.ComponentMolarFractionValue(iPerm)
         Next
         If PfeedPerm = 0 Then
             ' No permeating species in, exit permeation
@@ -553,7 +564,7 @@ ErrorTrap:
             For j = 0 To nPerm - 1
                 molFrac = edfInlet.ComponentMolarFractionValue(permIndices(j))
                 ' permCoeffs is 1 or 0.5 depending on molecule being homonuclear or heteronuclear
-                PfeedPermAtom(i) += permCoeffs(i, j) * Pfeed * molFrac
+                PfeedPermAtom(i) += permCoeffs(i, j) * PfeedPa * molFrac
             Next
             X(i) = PfeedPermAtom(i) / PfeedPerm
             ' PERMEATION FORMULA: F = P(i) * A / t * (X(i) * sqrt(p_in) - Y(i) * sqrt(p_out))
@@ -771,7 +782,6 @@ ErrorTrap:
             {permIndices(2), permIndices(4), -1}
         }
         permIndicesHomo = {permIndices(0), permIndices(3), permIndices(5)}
-        nPermAtom = isH + isD + isT
     End Sub
     Private Sub SetPermeationFlows(streams As ProcessStream(), permMolarFlows As Double())
         ' Updates vector of streams (vector of 3 or 4 Fluids) and,

@@ -453,7 +453,7 @@ end
 
 GroupBox GroupBox2
    Area 66 64 240 54
-   Label "&Permeation Parameters"
+   Label "&Permeation Parameters (mol m-1 s-1 Pa-0.5)"
    SourceViewMgr PageController 1
    SourceViewMgr DesignController 2
 end
