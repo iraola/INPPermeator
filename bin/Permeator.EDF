@@ -640,6 +640,7 @@ end
 
 NumericMatrixInfo PD
    Moniker ":ExtraData.0.0(PD)"
+   Format "%.3e"
    Label "PD"
    ViewOnly True
 end

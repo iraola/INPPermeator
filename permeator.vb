@@ -109,20 +109,24 @@ Imports HYSYS
             NumberOfPoints.Value = 0
         Else
             ' Visibility controllers
-            IRV = myContainer.FindVariable("Design_enum").Variable
-            IRV.Value = 0
+            ' I PREFER TO SEE THE LAST USED VIEW INSTEAD OF THE MAIN ONE
+            'IRV = myContainer.FindVariable("Design_enum").Variable
+            'IRV.Value = 0
+            '
             'Set the initial num value: Karlsruhe experiment for WDS and TEP (Welte, 2009)
-            thick = 0.0001              'm
-            edfThick.SetValue(thick)
-            Din = 0.0023                'm
-            edfDiam.SetValue(Din)
-            edfNtubes.SetValue(183)      '-
-            edfLen.SetValue(0.9)         'm
-            L = edfLen.GetValue() * edfNtubes.GetValue()
-            Dim Ravg As Double
-            Ravg = ((Din + (Din + 2 * thick)) / 2) / 2
-            Aperm = L * (2 * Math.PI * Ravg)
-            edfAperm.SetValue(Aperm)     'm2
+            ' I STOPPED DOING THIS SINCE IT MODIFIED PREVIOUS AREAS EVEN THOUGH THEY WERE
+            ' DEFINED, EVERY TIME YOU OPENED THE MODEL
+            'thick = 0.0001              'm
+            'edfThick.SetValue(thick)
+            'Din = 0.0023                'm
+            'edfDiam.SetValue(Din)
+            'edfNtubes.SetValue(183)      '-
+            'edfLen.SetValue(0.9)         'm
+            'L = edfLen.GetValue() * edfNtubes.GetValue()
+            'Dim Ravg As Double
+            'Ravg = ((Din + (Din + 2 * thick)) / 2) / 2
+            'Aperm = L * (2 * Math.PI * Ravg)
+            'edfAperm.SetValue(Aperm)     'm2
         End If
         ' Global variables: first calculation
         thick = edfThick.GetValue()
@@ -523,7 +527,7 @@ ErrorTrap:
         ' ReDim FpermCells(nCell - 1)
 
         ' Get inlet stream parameters
-        PfeedPa = edfInlet.Pressure.GetValue("Pa")      ' Pascal to match permeability formula
+        PfeedPa = edfInlet.Pressure.GetValue("N/m2")    ' Pascals to match permeability formula
         TfeedK = edfInlet.Temperature.GetValue("K")     ' K degrees to match permeability formula
         Qfeed = edfInlet.ActualVolumeFlowValue
         Ffeed = edfInlet.ComponentMolarFlowValue              ' molar flow per component
@@ -536,10 +540,10 @@ ErrorTrap:
         Dim P() As Double
         ReDim P(nPermAtom - 1)
         ' We calculate Input units as (kmol · m-1 · s -1 · Pa-0.5), therefore the division by 1000
-        For i = 0 To nPermAtom
+        For i = 0 To nPermAtom - 1
             P(i) = A(i) * Math.Exp(E(i) / (R * TfeedK)) / 1000  ' A() comes in mol, not kmol
         Next
-        ' Publish permeabilities in mol
+        ' Publish permeabilities in mol · ...
         edfPH.SetValue(P(0) * 1000)
         edfPD.SetValue(P(1) * 1000)
         edfPT.SetValue(P(2) * 1000)
