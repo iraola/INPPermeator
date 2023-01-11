@@ -27,10 +27,10 @@ ExtensionVariables EV
    TextVar "UtilsDLLVersion" "UtilsDLLVersion" 0 Persistent NoTriggerSolve
    RealVar "Thickness" "Thickness" "Length" 0 Persistent TriggerSolve
    RealVar "Diam" "Diam" "Length" 0 Persistent TriggerSolve
-   RealVar "n" "n" "Index" 0 Persistent TriggerSolve
    RealVar "Length" "Length" "Length" 0 Persistent TriggerSolve
-   RealVar "DT" "DT" "Index" 0 Persistent TriggerSolve
-   RealVar "DH" "DH" "Index" 0 Persistent TriggerSolve
+   RealVar "PT" "PT" "Index" 0 Persistent TriggerSolve
+   RealVar "PD" "PD" "Index" 0 Persistent TriggerSolve
+   RealVar "PH" "PH" "Index" 0 Persistent TriggerSolve
    TextVar "complabel" "complabel" 0 Persistent NoTriggerSolve
    TextVar "condlabel" "condlabel" 1 Persistent NoTriggerSolve
    RealVar "Composition" "Composition" "MassFraction" 2 Persistent TriggerSolve
@@ -68,6 +68,7 @@ ExtensionVariables EV
    RealVar "NumberOfPoints" "Number Of Points" "Index" 0 Persistent TriggerSolve
    TextVar "PlotName" "PlotName" 0 Persistent NoTriggerSolve
 end
+
 
 ~~_PermeatorExtn.Permeator_DefaultView
 
@@ -465,9 +466,9 @@ MatrixWidget MatrixWidget4
    LeftLabelWidth 70
    ShowLabels Left
    Direction Horizontal
-   Info DH
-   Info DT
-   Info n
+   Info PH
+   Info PD
+   Info PT
    Info NumbOfPoints
 end
 
@@ -630,23 +631,23 @@ Button Button1
    Message ":ExtraData.0.0(ActualizePlot)"
 end
 
-NumericMatrixInfo DH
-   Moniker ":ExtraData.0.0(DH)"
+NumericMatrixInfo PH
+   Moniker ":ExtraData.0.0(PH)"
    Format "%.3e"
-   Label "DH"
+   Label "PH"
    ViewOnly True
 end
 
-NumericMatrixInfo DT
-   Moniker ":ExtraData.0.0(DT)"
-   Format "%.3e"
-   Label "DT"
+NumericMatrixInfo PD
+   Moniker ":ExtraData.0.0(PD)"
+   Label "PD"
    ViewOnly True
 end
 
-NumericMatrixInfo n
-   Moniker ":ExtraData.0.0(n)"
-   Label "n"
+NumericMatrixInfo PT
+   Moniker ":ExtraData.0.0(PT)"
+   Format "%.3e"
+   Label "PT"
    ViewOnly True
 end
 

@@ -42,9 +42,9 @@ Imports HYSYS
     Private edfAperm As InternalRealVariable
     Private edfNtubes As InternalRealVariable
     Private edfk As InternalRealVariable
-    'Private edfn As InternalRealVariable
-    'Private edfDT As InternalRealVariable
-    'Private edfDH As InternalRealVariable
+    Private edfPH As InternalRealVariable
+    Private edfPD As InternalRealVariable
+    Private edfPT As InternalRealVariable
     'Private edfComposition As InternalRealFlexVariable
     'Private edfCompName As InternalTextFlexVariable
     'Private edfStreamName As InternalTextFlexVariable
@@ -284,9 +284,9 @@ ErrorTrap:
         edfAperm = Nothing
         edfNtubes = Nothing
         edfk = Nothing
-        'edfn = Nothing
-        'edfDT = Nothing
-        'edfDH = Nothing
+        edfPH = Nothing
+        edfPD = Nothing
+        edfPT = Nothing
         'edfComposition = Nothing
         'edfCompName = Nothing
         'edfStreamName = Nothing
@@ -387,8 +387,6 @@ ErrorTrap:
                 Volume = L * Area
 
             '%% Pressure drop and others
-            Case "n"
-                'edfn = myContainer.FindVariable("n").Variable
             Case "PressDrop"
                 edfPressDrop = myContainer.FindVariable("PressDrop").Variable
             Case "PermPressDrop"
@@ -443,9 +441,9 @@ ErrorTrap:
             edfAperm = .FindVariable("Aperm").Variable
             edfNtubes = .FindVariable("Ntubes").Variable
             edfk = .FindVariable("k").Variable
-            'edfn = .FindVariable("n").Variable
-            'edfDT = .FindVariable("DT").Variable
-            'edfDH = .FindVariable("DH").Variable
+            edfPH = .FindVariable("PH").Variable
+            edfPD = .FindVariable("PD").Variable
+            edfPT = .FindVariable("PT").Variable
             'edfComposition = .FindVariable("Composition").Variable
             'edfCompName = .FindVariable("CompoName").Variable
             'edfStreamName = .FindVariable("StreamNames").Variable
@@ -531,8 +529,9 @@ ErrorTrap:
         ' TODO: MULTIPLY P TO AUTOMATICALLY GET FLOWS OF kmol/s (HYSYS default units)
 
         ' TODO: Set calculated PERMEABILITY values in edf for user's visualization
-        ' edfDT.SetValue(DT)
-        ' edfDH.SetValue(DH)
+        ' edfPH.SetValue(PH)
+        ' edfPD.SetValue(PD)
+        ' edfPT.SetValue(PT)
 
         ' LOOPS: use "i" for atoms (H, D, T) and "j" for molecules (H2, HD, HT, D2, DT, T2)
         ' Get total inlet pressure of permeating species ONLY. Apply Dalton's law
@@ -606,9 +605,9 @@ ErrorTrap:
         '    If CHi = -32767 Then CHi = 0
         '    If CHo = -32767 Then CHo = 0
         '    ' Permeation calculation [at/s]. Richardson's law: [kmol/s�m2] -> multiply by "ApermCell" -> [kmol/s]
-        '    Fperm(idxT2) = (DT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
-        '    Fperm(idxH2) = (DH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
-        '    '   Old calc. (pi * L * DH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
+        '    Fperm(idxT2) = (PT / thick) * ((CHTsi + CTsi) - (CTso + CHTso)) * ApermCell
+        '    Fperm(idxH2) = (PH / thick) * ((CHTsi + CHsi) - (CHso + CHTso)) * ApermCell
+        '    '   Old calc. (pi * L * PH / Log(1 + (thick / (Din / 2))) * ((CHTsi + CHsi) - (CHso + CHTso)))
         '    ' Molar flow component vector in next cell
         '    Fcell = vectorSubtractIf(Fcell, Fperm)      ' Special function for dealing with undesired negarive permeate flow
         '    FpermTotal = vectorSum(Fperm, FpermTotal)   ' Aggregate permeation from previous cells
